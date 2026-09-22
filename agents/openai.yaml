@@ -1,0 +1,8 @@
+interface:
+  display_name: "月明·四平台视频发布"
+  short_description: "按月明工作流准备、验证并发布四平台视频"
+  brand_color: "#39EC88"
+  default_prompt: "使用 $moonlit-video-publisher 将本地成片准备到已配置的平台；默认停在发布前，只有我在本次运行明确授权时才逐平台发布并验证结果。"
+
+policy:
+  allow_implicit_invocation: true
