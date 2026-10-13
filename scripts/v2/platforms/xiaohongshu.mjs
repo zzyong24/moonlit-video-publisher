@@ -2,7 +2,9 @@ const xhsTitle = pkg.platformTitle.xiaohongshu;
 const xhsTopics = pkg.xhsTopics;
 const xhsVideoName = videoPath.split('/').pop();
 const xhsCustomCover = pkg.cover?.uploadCustomCover === true;
-const xhsCoverPath = String(pkg.cover?.vertical3x4Path || '');
+const xhsMappedCover = pkg.cover?.platformAssets?.xiaohongshu?.[0];
+const xhsCoverPath = String(xhsMappedCover?.path || pkg.cover?.horizontal4x3Path || '');
+const xhsCoverRatio = xhsMappedCover?.ratio || '4:3';
 
 async function inspectXiaohongshu() {
   const state = await js(String.raw`((expectedName, expectedTitle, requestedTopics) => {
@@ -47,8 +49,8 @@ async function inspectXiaohongshu() {
       originalSwitch.checked === true
       || originalSwitch.getAttribute?.('aria-checked') === 'true'
       || originalSwitch.getAttribute?.('data-state') === 'checked'
-      || /checked|active|open|enabled/.test(String(originalSwitch.className || ''))
-      || /checked|active|open|enabled/.test(String(simulator?.className || ''))
+      || /(?:^|\s)(?:checked|active|open|enabled)(?:\s|$)/.test(String(originalSwitch.className || ''))
+      || /(?:^|\s)(?:checked|active|open|enabled)(?:\s|$)/.test(String(simulator?.className || ''))
     ))
     const activeDialogs = [...document.querySelectorAll('.d-modal-mask, [role="dialog"], [class*="modal-mask"], .pk-cover-guide-popover')]
       .map(el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return { text: compact(el.innerText || el.textContent || ''), cls: String(el.className || ''), width: r.width, height: r.height, opacity: s.opacity, display: s.display, visibility: s.visibility } })
@@ -68,7 +70,7 @@ async function inspectXiaohongshu() {
   const receipt = expectedReceipts.cover || null;
   const receiptMatches = Boolean(receipt
     && receipt.assetPath === xhsCoverPath
-    && receipt.ratio === '3:4'
+    && receipt.ratio === xhsCoverRatio
     && receipt.afterUrl
     && state.coverBg.includes(receipt.afterUrl));
   const coverOk = xhsCustomCover
@@ -232,6 +234,8 @@ async function rebuildXhsTopics() {
 }
 
 async function ensureXhsOriginal() {
+  const lifecycle=await activateXhsTopicLifecycle();
+  if(!lifecycle.ok)return lifecycle;
   await removeExactStaleMask(/笔记完成原创声明后|原创声明须知|声明原创/);
   let inspected = await inspectXiaohongshu();
   if (inspected.gates.original.ok) return { ok: true, already: true };
@@ -246,7 +250,11 @@ async function ensureXhsOriginal() {
     target.id='vp2-xhs-original-control';target.scrollIntoView({block:'center',inline:'center'});return {ok:true,selector:'#vp2-xhs-original-control',className:String(target.className||''),tag:target.tagName,role:target.getAttribute?.('role')||''}
   })()`);
   if (!control.ok) return control;
-  await click(control.selector,{label:'enable xhs original declaration'}).catch(()=>{});
+  const originalTask=await taskSpace(activeTaskSpace.id);
+  const originalTab=(await originalTask.tabs()).find(item=>/creator\.xiaohongshu\.com/.test(item.url||''));
+  const originalPage=originalTab?.label?originalTask.page(originalTab.label):originalTab?await originalTask.adopt(originalTab.page):null;
+  if(!originalPage)return {ok:false,reason:'xiaohongshu original page missing'};
+  await originalPage.click(control.selector);
   await wait(1.5);
   const modalResult = await js(String.raw`(() => {
     const modal = [...document.querySelectorAll('.d-modal')].find(el => /笔记完成原创声明后|原创声明须知/.test(el.innerText || el.textContent || ''))
@@ -299,9 +307,26 @@ async function uploadXhsCover() {
       input.id='vp2-xhs-cover';return {ok:true,mode:'modern',selector:'#vp2-xhs-cover'}
     })()`);
     if (modern.ok) { tab = { ...modern, attempt: attempt + 1 }; break; }
+    // The legacy task-space handle has no page() method. Resolve the same
+    // recorded space through the modern API so hidden hover controls appear.
+    const coverTask = await taskSpace(activeTaskSpace.id);
+    const coverTabs = await coverTask.tabs();
+    const coverTab = coverTabs.find(item => /creator\.xiaohongshu\.com/.test(item.url || ''));
+    const coverPage = coverTab?.label ? coverTask.page(coverTab.label) : null;
+    if (coverPage) {
+      await coverPage.hover('.cover-plugin-preview .default.row, .cover-plugin-preview .default.column', { label: 'show xhs cover controls' }).catch(() => {});
+    }
     await removeExactStaleMask(/设置封面/);
     try {
-      await click('.cover-edit-entry, .cover-plugin-preview .default.row, .cover-plugin-preview .default.column', { label: 'open xhs cover editor' });
+      // Newer video editors render the preview card's parent and its clickable
+      // `.cover-edit-entry` as overlapping matches. The combined selector is
+      // ambiguous in Ego Lite, so target the actual entry first; retain the
+      // preview wrapper only as a compatibility fallback for older layouts.
+      try {
+        await click('.cover-edit-entry', { label: 'open xhs cover editor' });
+      } catch {
+        await click('.cover-plugin-preview .default.row, .cover-plugin-preview .default.column', { label: 'open xhs cover editor' });
+      }
     } catch (primaryError) {
       try {
         await click('text="编辑封面"', { label: 'open xhs cover editor' });
@@ -310,6 +335,15 @@ async function uploadXhsCover() {
         continue;
       }
     }
+    // Some editors only reveal the actual entry after the preview is clicked.
+    // A successful preview click is not evidence that the upload modal opened.
+    const revealedEdit = await js(String.raw`(() => {
+      const compact=value=>String(value||'').replace(/\s+/g,' ').trim()
+      const visible=el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return r.width>8&&r.height>8&&s.display!=='none'&&s.visibility!=='hidden'}
+      const hasUpload=[...document.querySelectorAll('input[type=file][aria-label="上传封面图片"]')].some(visible)
+      return !hasUpload&&[...document.querySelectorAll('.cover-plugin-preview *')].some(el=>compact(el.innerText||el.textContent||'')==='编辑封面'&&visible(el))
+    })()`);
+    if (revealedEdit) await click('text="编辑封面"', { label: 'enter xhs cover editor' }).catch(() => {});
     for (let index = 0; index < 20; index += 1) {
       const exposed = await js(String.raw`(() => {
         const compact=value=>String(value||'').replace(/\s+/g,' ').trim()
@@ -318,13 +352,23 @@ async function uploadXhsCover() {
         const modernModal=labeledInput?.closest('.main-cover-editor-modal,[role="dialog"]')
           || [...document.querySelectorAll('.main-cover-editor-modal')].find(visible)
         const modernInput=labeledInput || modernModal?.querySelector('input[type=file][accept*="image"]')
-        if(modernInput){modernInput.id='vp2-xhs-cover';return {ok:true,mode:'modern',selector:'#vp2-xhs-cover'}}
+        if(modernInput && !modernInput.disabled){modernInput.id='vp2-xhs-cover';return {ok:true,mode:'modern',selector:'#vp2-xhs-cover'}}
+        // A previously uploaded thumbnail replaces the file input in the modern editor.
+        // Clear only that editor's existing image to expose its actual upload input.
+        const activeModal=[...document.querySelectorAll('.d-modal-mask')].find(el=>visible(el)&&compact(el.innerText).includes('设置封面'))
+        const clearOld=activeModal?.querySelector('.uploaded-thumbnail-clear[aria-label="清除已上传封面"]')
+        if(clearOld&&visible(clearOld)){clearOld.id='vp2-xhs-clear-uploaded-cover';return {ok:true,mode:'clear-old',selector:'#vp2-xhs-clear-uploaded-cover'}}
         const item=[...document.querySelectorAll('.d-tabs-header')]
           .find(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return compact(el.innerText||el.textContent||'')==='上传封面'&&r.width>10&&r.height>10&&s.display!=='none'&&s.visibility!=='hidden'})
         if(!item)return {ok:false}
         item.id='vp2-xhs-upload-cover-tab';item.scrollIntoView({block:'center',inline:'center'});return {ok:true,selector:'#vp2-xhs-upload-cover-tab'}
       })()`);
       if (exposed.ok) {
+        if (exposed.mode === 'clear-old') {
+          await click(exposed.selector, { label: 'replace old xhs cover' });
+          await wait(.5);
+          continue;
+        }
         if (exposed.mode === 'modern') {
           tab = { ok: true, mode: 'modern', attempt: attempt + 1, waited: index * 0.5 };
           break;
@@ -351,7 +395,9 @@ async function uploadXhsCover() {
   try { await uploadFile(exposed.selector, xhsCoverPath); } catch (error) { return { ok: false, reason: String(error?.message || error) }; }
   await wait(2);
   if (tab.mode === 'modern') {
-    const control = await js(String.raw`(() => {
+    let control = {ok:false};
+    for(let poll=0;poll<60&&!control.ok;poll+=1){
+    control = await js(String.raw`(() => {
       const compact=value=>String(value||'').replace(/\s+/g,' ').trim();const visible=el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return r.width>20&&r.height>15&&s.display!=='none'&&s.visibility!=='hidden'}
       const labeledInput=[...document.querySelectorAll('input[type=file][aria-label="上传封面图片"]')].find(visible)
       const modal=labeledInput?.closest('.main-cover-editor-modal,[role="dialog"]')
@@ -361,15 +407,17 @@ async function uploadXhsCover() {
       if(!button)return {ok:false,reason:'xiaohongshu modern cover completion control missing or disabled'}
       button.id='vp2-xhs-cover-complete';return {ok:true,selector:'#vp2-xhs-cover-complete'}
     })()`);
+    if(!control.ok)await wait(.5);
+    }
     if (!control.ok) return control;
     try { await click(control.selector, { label: 'complete xhs custom cover' }); }
     catch (error) { return { ok: false, reason: `xiaohongshu modern cover completion failed: ${String(error?.message || error)}` }; }
   } else {
-    const ratio = await js(String.raw`(() => {
-      const item=[...document.querySelectorAll('.crop-ratio-item')].find(el=>String(el.innerText||el.textContent||'').replace(/\s+/g,' ').trim()==='3:4')
-      if(!item)return {ok:false,reason:'xiaohongshu 3:4 crop chip missing'}
+    const ratio = await js(String.raw`((expectedRatio) => {
+      const item=[...document.querySelectorAll('.crop-ratio-item')].find(el=>String(el.innerText||el.textContent||'').replace(/\s+/g,' ').trim()===expectedRatio)
+      if(!item)return {ok:false,reason:'xiaohongshu requested crop chip missing',expectedRatio}
       item.click(); return {ok:true,className:String(item.className||'')}
-    })()`);
+    })(${JSON.stringify(xhsCoverRatio)})`);
     if (!ratio.ok) return ratio;
     await wait(1);
     const confirmed = await js(String.raw`(() => {
@@ -390,7 +438,7 @@ async function uploadXhsCover() {
   await removeExactStaleMask(/设置封面/);
   if (!after || after === before) return { ok: false, reason: 'xiaohongshu cover preview did not change', before, after };
   const url = (after.match(/url\(["']?([^"')]+)/) || [])[1] || after;
-  return { ok: true, receipt: { assetPath: xhsCoverPath, ratio: '3:4', beforeUrl: before, afterUrl: url } };
+  return { ok: true, receipt: { assetPath: xhsCoverPath, ratio: xhsCoverRatio, beforeUrl: before, afterUrl: url } };
 }
 
 async function mutateXiaohongshu() {

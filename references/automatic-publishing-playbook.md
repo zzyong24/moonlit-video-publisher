@@ -19,6 +19,22 @@ Interpret the result literally:
 
 Never create a second publishing job to escape a recoverable blocker. It loses the link between page truth, package fingerprint, and cover receipts.
 
+If the user changes a platform's title, topics, or cover after a job starts, preserve the original package and job as historical evidence; its fingerprint cannot be silently rewritten. Finish unaffected platforms with the original job. If the changed platform has not accepted a video or created a matching draft, create a versioned package and a new job for that platform only. If it already has a matching upload, inspect and plan an in-place recovery before any new upload; never duplicate a draft merely to apply metadata changes. Record which package and job actually supplied each platform release.
+
+For an in-place repair on a matching existing draft or post, first identify its recorded numeric task-space id and exact stable task-space name. Use a fresh inspect, then target that same page with the one-platform runner and recorded id; do not start a new orchestrator job just to change metadata, because a new task suffix can create a new task space. After mutation, run an independent verify against the same task space and confirm the visible cover before using any currently authorized final control. Never upload the video again to apply a cover correction. Record the versioned package that supplied the correction alongside the original upload history.
+
+## Prepare metadata while native upload continues
+
+When the user requests this timing change and the real editor exposes enabled title, body, topic and declaration controls, prepare them during the native upload rather than leaving them idle. This is a bounded single-controller recovery path; the maintained automatic orchestrator still uses its upload barrier.
+
+1. Identify the exact active publisher CLI process tree and its task-space/name. Stop only that waiting CLI controller and its runner, never the browser process, native upload, video input, or another job. Confirm those controller processes have exited before using another UI command. Do not touch page ownership without the user's explicit continuation after USER_CONTROL.
+2. Keep the same page, package, fingerprint and ongoing upload. Prove the filename/current target, actual upload progress, editable field availability, armed final guard and zero blocked attempts. Run the current guoshen gate for the unchanged package.
+3. Use the existing idempotent title/body/topic/setting helpers under one serialized controller. Do not invoke the ordinary full `mutate` phase while its video prerequisite is false or bypass that check. Save independent field evidence; real entities, exact prose and no residue are still required.
+4. Read and set the actual native AI label where required. A cover can be prepared only if the correct slot's real editor is available. Verify both accepted artworks and distinct preview URLs before calling the maintained fingerprint-bound checkpoint helper. Do not accept video-derived thumbnails as custom-asset proof.
+5. Wait for the native upload and processing to finish. Resume the ordinary same-job runner for only the pending platform; it must import any valid checkpoint, avoid reinjection of a still-running or completed target, independently verify every final gate, and preserve already committed metadata. Never include already submitted platforms in that run.
+
+The 2026-10-09 Douyin recovery verified title, exact body, five real topic entities and no-sync while the 533 MB native upload was still in progress; original rights/final authorization were not changed. This evidence does not establish an automatic scheduler or four-platform interleaving regression. Disabled/absent fields and upload-processing-dependent controls remain deferred; the final control always waits for complete upload and final review.
+
 ## 2. Recover a lost cover receipt
 
 A browser interruption can occur after the platform accepts a cover but before the fingerprint-bound checkpoint is written. The page then shows the approved cover while verification reports `custom cover receipt missing`.
@@ -71,7 +87,7 @@ Required evidence:
 
 | Platform | Final control | Success evidence | Recorded status |
 |---|---|---|---|
-| Xiaohongshu | editor footer `发布` | `发布成功` page | `published` |
+| Xiaohongshu | editor footer `发布` | `发布成功` page | `submitted` until public visibility is confirmed in this workspace |
 | Douyin | primary `发布` | search exact title in content manager; `审核中` or `已发布` | match page truth |
 | Bilibili | `.submit-add` / `立即投稿` | `稿件投递成功` | `submitted` until accepted |
 | WeChat Channels | `发表` | exact target in content list with `原创审核中` or published state | `submitted` or `published` |

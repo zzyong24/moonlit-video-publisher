@@ -53,7 +53,8 @@ test('cover receipt recovery binds fresh live evidence to the package and task s
     const douyin = JSON.parse(await fs.promises.readFile(path.join(checkpointDir, 'douyin.receipts.json'), 'utf8'));
     assert.equal(xhs.fingerprint, identity.fingerprint);
     assert.equal(xhs.taskSpaceId, 3);
-    assert.equal(xhs.receipts.cover.assetPath, portraitPath);
+    assert.equal(xhs.receipts.cover.assetPath, landscapePath);
+    assert.equal(xhs.receipts.cover.ratio, '4:3');
     assert.equal(douyin.receipts.cover.slots.portrait.afterUrl, 'https://dy.example/p.jpg');
     assert.equal(douyin.receipts.cover.slots.landscape.afterUrl, 'https://dy.example/l.jpg');
   } finally {

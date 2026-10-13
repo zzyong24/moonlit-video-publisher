@@ -17,7 +17,7 @@ for (const phase of ["upload", "mutate"]) {
     const configPath = path.join(root, "config.json");
     const log = path.join(root, "events.ndjson");
     fs.writeFileSync(videoPath, "fixture");
-    fs.writeFileSync(packagePath, JSON.stringify({ videoPath, title: "Control test", xhsTopics: ["Test"], douyinTopics: ["Test"] }));
+    fs.writeFileSync(packagePath, JSON.stringify({ videoPath, title: "Control test", xhsTopics: ["Test"], douyinTopics: ["Test"], cover: { uploadCustomCover: false, useVideoFrame: true, approvalEvidence: "test fixture" } }));
     fs.writeFileSync(configPath, JSON.stringify({ schemaVersion: 1, onboarding: { completed: true }, sourceDirectory: root, defaultPlatforms: ["xiaohongshu", "douyin"], declarations: { originalityPolicy: "all_videos_original" } }));
     const result = await run(process.execPath, [path.join(V2_DIR, "publisher.mjs"), packagePath, "control-test", "xiaohongshu", "douyin", "--state-root", root, "--upload-concurrency", "1"], { env: { ...process.env, VIDEO_PUBLISHER_CONFIG: configPath, VIDEO_PUBLISHER_V2_RUNNER: path.join(DIR, "mock-runner.mjs"), VIDEO_PUBLISHER_V2_MOCK_LOG: log, VIDEO_PUBLISHER_V2_MOCK_USER_CONTROL: `xiaohongshu:${phase}` } });
     assert.equal(result.code, 10, result.stderr);
@@ -75,7 +75,8 @@ test("publisher waits for every upload process before serial UI mutation", async
     xhsTopics:["Automation","Tutorial"],
     wechatDescription:"Automation test\n\n#Automation #Tutorial",
     wechatTags:["Automation","Tutorial"],
-    cover:{uploadCustomCover:false}
+    contentTypeDeclaration:"无需标注",
+    cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}
   }));
   const result=await run(process.execPath,[path.join(V2_DIR,"publisher.mjs"),packagePath,"test","--confirm-original-rights","--state-root",root],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,"mock-runner.mjs"),VIDEO_PUBLISHER_V2_MOCK_LOG:log}});
   assert.equal(result.code,0,`${result.stderr}\n${result.stdout}`);
@@ -96,7 +97,7 @@ test("publisher circuit-breaks all UI mutation after an upload loses Ego", async
   const configPath=path.join(root,"config.json");
   await fs.promises.writeFile(videoPath,"test video fixture");
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["xiaohongshu","douyin"],declarations:{originalityPolicy:"all_videos_original"},execution:{checkConcurrency:2,uploadConcurrency:2}}));
-  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Circuit breaker",xhsTopics:["Test"],douyinTopics:["Test"],cover:{uploadCustomCover:false}}));
+  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Circuit breaker",xhsTopics:["Test"],douyinTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   const result=await run(process.execPath,[path.join(V2_DIR,"publisher.mjs"),packagePath,"channel-break","xiaohongshu","douyin","--state-root",root],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,"mock-runner.mjs"),VIDEO_PUBLISHER_V2_MOCK_LOG:log,VIDEO_PUBLISHER_V2_MOCK_BROKEN_CHANNEL:"douyin:upload"}});
   assert.equal(result.code,0,`${result.stderr}\n${result.stdout}`);
   assert.match(result.stderr,/UI serial: none \(input channel broken\)/);
@@ -113,7 +114,7 @@ test("publisher stops the serial UI queue when a mutator loses Ego", async () =>
   const configPath=path.join(root,"config.json");
   await fs.promises.writeFile(videoPath,"test video fixture");
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["xiaohongshu","douyin","bilibili","wechat_channels"],declarations:{originalityPolicy:"all_videos_original"},execution:{checkConcurrency:4,uploadConcurrency:4}}));
-  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Mutation break",xhsTopics:["Test"],douyinTopics:["Test"],bilibiliDescription:"Mutation circuit breaker",bilibiliTags:["Test"],wechatDescription:"Mutation circuit breaker\n\n#Test",wechatTags:["Test"],cover:{uploadCustomCover:false}}));
+  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Mutation break",xhsTopics:["Test"],douyinTopics:["Test"],bilibiliDescription:"Mutation circuit breaker",bilibiliTags:["Test"],wechatDescription:"Mutation circuit breaker\n\n#Test",wechatTags:["Test"],contentTypeDeclaration:"无需标注",cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   const result=await run(process.execPath,[path.join(V2_DIR,"publisher.mjs"),packagePath,"mutation-break","xiaohongshu","douyin","bilibili","wechat_channels","--state-root",root],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,"mock-runner.mjs"),VIDEO_PUBLISHER_V2_MOCK_LOG:log,VIDEO_PUBLISHER_V2_MOCK_BROKEN_CHANNEL:"douyin:mutate"}});
   assert.equal(result.code,0,`${result.stderr}\n${result.stdout}`);
   const events=(await fs.promises.readFile(log,"utf8")).trim().split(/\n/).map(line=>JSON.parse(line));
@@ -150,7 +151,7 @@ test("publisher allows an available non-default platform when explicitly selecte
   const configPath=path.join(root,"config.json");
   const log=path.join(root,"events.ndjson");
   await fs.promises.writeFile(videoPath,"test video fixture");
-  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Availability override",douyinTopics:["Test"],cover:{uploadCustomCover:false}}));
+  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Availability override",douyinTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:2,onboarding:{completed:true},sourceDirectory:root,availablePlatforms:["xiaohongshu","douyin"],defaultPlatforms:["xiaohongshu"],declarations:{originalityPolicy:"all_videos_original"},execution:{checkConcurrency:2,uploadConcurrency:2}}));
   const result=await run(process.execPath,[path.join(V2_DIR,"publisher.mjs"),packagePath,"availability-override","douyin","--state-root",root],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,"mock-runner.mjs"),VIDEO_PUBLISHER_V2_MOCK_LOG:log}});
   assert.equal(result.code,0,`${result.stderr}\n${result.stdout}`);
@@ -167,7 +168,7 @@ test("publisher requires current-run confirmation when onboarding policy asks ea
   const log=path.join(root,"events.ndjson");
   await fs.promises.writeFile(videoPath,"test video fixture");
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["xiaohongshu"],execution:{checkConcurrency:1,uploadConcurrency:1}}));
-  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Rights test",xhsTopics:["Test"],cover:{uploadCustomCover:false}}));
+  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Rights test",xhsTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   const result=await run(process.execPath,[path.join(V2_DIR,"publisher.mjs"),packagePath,"xiaohongshu"],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,"mock-runner.mjs"),VIDEO_PUBLISHER_V2_MOCK_LOG:log}});
   assert.equal(result.code,2);
   assert.match(result.stderr,/Originality confirmation is required/);
@@ -182,7 +183,7 @@ test("publisher accepts onboarded all-videos-original policy without a one-run f
   const log=path.join(root,"events.ndjson");
   await fs.promises.writeFile(videoPath,"test video fixture");
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["xiaohongshu"],declarations:{originalityPolicy:"all_videos_original"},execution:{checkConcurrency:1,uploadConcurrency:1}}));
-  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Standing rights test",xhsTopics:["Test"],cover:{uploadCustomCover:false}}));
+  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Standing rights test",xhsTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   const result=await run(process.execPath,[path.join(V2_DIR,"publisher.mjs"),packagePath,"xiaohongshu","--state-root",root],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,"mock-runner.mjs"),VIDEO_PUBLISHER_V2_MOCK_LOG:log}});
   assert.equal(result.code,0,`${result.stderr}\n${result.stdout}`);
   assert.equal(fs.existsSync(log),true,"browser runner should start under the standing originality policy");
@@ -197,7 +198,7 @@ test("publisher blocks an over-15-minute Douyin video before browser work", asyn
   const log=path.join(root,"events.ndjson");
   await fs.promises.writeFile(videoPath,mp4WithDuration(901));
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["douyin"],declarations:{originalityPolicy:"all_videos_original"},execution:{checkConcurrency:1,uploadConcurrency:1}}));
-  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Duration test",douyinTopics:["Test"],cover:{uploadCustomCover:false}}));
+  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Duration test",douyinTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   const result=await run(process.execPath,[path.join(V2_DIR,"publisher.mjs"),packagePath,"duration-test","douyin","--state-root",root],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,"mock-runner.mjs"),VIDEO_PUBLISHER_V2_MOCK_LOG:log}});
   assert.equal(result.code,1);
   assert.match(result.stderr,/DOUYIN_DURATION_LIMIT/);
@@ -212,7 +213,7 @@ test("publisher isolates a Douyin duration blocker and still prepares eligible p
   const log=path.join(root,"events.ndjson");
   await fs.promises.writeFile(videoPath,mp4WithDuration(901));
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["xiaohongshu","douyin"],declarations:{originalityPolicy:"all_videos_original"},execution:{checkConcurrency:2,uploadConcurrency:2}}));
-  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Partial preflight",xhsTopics:["Test"],douyinTopics:["Test"],cover:{uploadCustomCover:false}}));
+  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Partial preflight",xhsTopics:["Test"],douyinTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   const result=await run(process.execPath,[path.join(V2_DIR,"publisher.mjs"),packagePath,"partial-preflight","xiaohongshu","douyin","--state-root",root],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,"mock-runner.mjs"),VIDEO_PUBLISHER_V2_MOCK_LOG:log}});
   assert.equal(result.code,10,`${result.stderr}\n${result.stdout}`);
   const summary=JSON.parse(result.stdout);
@@ -232,7 +233,7 @@ test("publisher invalidates receipts and checkpoints when Ego recreates a task s
   const jobId="task-recreate-job";
   await fs.promises.writeFile(videoPath,"test video fixture");
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["xiaohongshu"],declarations:{originalityPolicy:"all_videos_original"},execution:{checkConcurrency:1,uploadConcurrency:1}}));
-  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Task recreate",xhsTopics:["Test"],cover:{uploadCustomCover:false}}));
+  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Task recreate",xhsTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   const args=[path.join(V2_DIR,"publisher.mjs"),packagePath,"task-recreate","xiaohongshu","--job-id",jobId,"--state-root",root];
   const baseEnv={...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,"mock-runner.mjs")};
   const first=await run(process.execPath,args,{env:baseEnv});
@@ -272,7 +273,7 @@ test("publisher preserves the recorded task-space name when a retry changes its 
   const jobId="stable-task-name-job";
   await fs.promises.writeFile(videoPath,"test video fixture");
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["xiaohongshu"],declarations:{originalityPolicy:"all_videos_original"},execution:{checkConcurrency:1,uploadConcurrency:1}}));
-  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Stable task name",xhsTopics:["Test"],cover:{uploadCustomCover:false}}));
+  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Stable task name",xhsTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   const base=[path.join(V2_DIR,"publisher.mjs"),packagePath];
   const tail=["xiaohongshu","--job-id",jobId,"--state-root",root];
   const env={...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,"mock-runner.mjs")};
@@ -298,7 +299,7 @@ test("two publishers for the same job produce one winner and one immediate refus
   const log=path.join(root,"events.ndjson");
   await fs.promises.writeFile(videoPath,"test video fixture");
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["xiaohongshu"],declarations:{originalityPolicy:"all_videos_original"},execution:{checkConcurrency:1,uploadConcurrency:1}}));
-  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Double run",xhsTopics:["Test"],cover:{uploadCustomCover:false}}));
+  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Double run",xhsTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   const args=[path.join(V2_DIR,"publisher.mjs"),packagePath,"double-run","xiaohongshu","--job-id","shared-job","--state-root",root];
   const options={env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,"mock-runner.mjs"),VIDEO_PUBLISHER_V2_MOCK_LOG:log}};
   const results=await Promise.all([run(process.execPath,args,options),run(process.execPath,args,options)]);
@@ -320,7 +321,7 @@ test("two different jobs under one state root cannot split platform ownership", 
     const videoPath=path.join(root,`sample-${suffix}.mp4`);
     const packagePath=path.join(root,`package-${suffix}.json`);
     await fs.promises.writeFile(videoPath,`test video fixture ${suffix}`);
-    await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:`Global lock ${suffix}`,xhsTopics:["Test"],cover:{uploadCustomCover:false}}));
+    await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:`Global lock ${suffix}`,xhsTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
     packagePaths.push(packagePath);
   }
   const options={env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,"mock-runner.mjs"),VIDEO_PUBLISHER_V2_MOCK_LOG:log}};
@@ -337,4 +338,22 @@ test("two different jobs under one state root cannot split platform ownership", 
   const stateFiles=["job-a","job-b"].filter(jobId=>fs.existsSync(path.join(root,jobId,"state.json")));
   assert.equal(stateFiles.length,1,"the refused job must not write state");
   assert.equal(fs.existsSync(path.join(root,".publisher","orchestrator.lock")),false);
+});
+
+test('a fingerprint-bound recovery checkpoint overrides stale persisted cover receipts', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-fresh-checkpoint-'));
+  const videoPath = path.join(root, 'video.mp4'), packagePath = path.join(root, 'package.json'), configPath = path.join(root, 'config.json');
+  fs.writeFileSync(videoPath, 'fixture');
+  fs.writeFileSync(packagePath, JSON.stringify({videoPath, title:'Checkpoint recovery', douyinTopics:['Test'], cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:'fixture'}}));
+  fs.writeFileSync(configPath, JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:['douyin'],declarations:{originalityPolicy:'all_videos_original'}}));
+  const args=[path.join(V2_DIR,'publisher.mjs'),packagePath,'checkpoint','douyin','--state-root',root,'--job-id','checkpoint'];
+  const env={...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,'mock-runner.mjs')};
+  const first=await run(process.execPath,args,{env}); assert.equal(first.code,0,first.stderr);
+  const jobDir=path.join(root,'checkpoint'), stateFile=path.join(jobDir,'state.json');
+  const state=JSON.parse(fs.readFileSync(stateFile,'utf8'));
+  const corrected={cover:{assetPath:'same-image.png',afterUrl:'https://example.test/new.jpg'}};
+  fs.writeFileSync(path.join(jobDir,'checkpoints/douyin.receipts.json'),JSON.stringify({schemaVersion:2,platform:'douyin',fingerprint:state.fingerprint,taskSpaceId:state.platforms.douyin.taskSpaceId,receipts:corrected,writtenAt:new Date().toISOString()}));
+  await run(process.execPath,[...args,'--inspect-only'],{env});
+  const restored=JSON.parse(fs.readFileSync(stateFile,'utf8'));
+  assert.deepEqual(restored.platforms.douyin.receipts,corrected);
 });

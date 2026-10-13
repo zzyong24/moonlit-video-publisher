@@ -78,13 +78,19 @@ Default cover behavior comes from `cover.uploadExistingByDefault`, which should 
 Map user-supplied cover files this way:
 
 ```text
-Xiaohongshu: 3:4 portrait
+Xiaohongshu: 4:3 landscape
 WeChat Channels: both 3:4 portrait and 4:3 landscape
 Bilibili: 4:3 landscape
 Douyin: both 3:4 portrait and 4:3 landscape
 ```
 
 ## Proposal Shape
+
+### 标题、简介与话题的搜索意图审读
+
+先从视频真实内容里写出观众会搜索的具体问题，再拟标题、简介与话题。标题前部交代问题或对象；简介开头说明这条视频能回答什么，后面再补经历、证据和适用范围；话题只选视频确实涉及的领域、问题或产品，不为凑数量加泛词。候选话题须在平台输入时选中真实实体，纯文本 `#词` 不算已提交话题。
+
+用户分享的创作者经验可提供写法线索，但未经平台官方证实的搜索权重、固定字数、流量倍数不得写成算法规则。能访问站内搜索时核对联想词、搜索结果和话题候选；访问受限就明确标记候选词未获实时热度验证。发布后再看实际搜索词、点击和观看数据，记录修改前后时间与指标，不把一次波动直接归因于某个标签。
 
 When the user has not provided title and tags:
 
@@ -121,4 +127,5 @@ B站允许保留的平台自动 tags: 留空，除非用户明确确认
 封面: 使用平台默认封面；若本轮明确要求上传已有封面，则记录所需 3:4/4:3 文件路径
 平台:
 是否使用字幕版:
+内容类型声明: 从制作记录确认后写入 contentTypeDeclaration；含生成画面选“含AI生成内容”，已确认无需标注时写“无需标注”或平台对应的无标注值。视频号必须提供声明；与原创/自制权利分别核验
 ```

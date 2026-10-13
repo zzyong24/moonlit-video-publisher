@@ -59,7 +59,7 @@ for (const platform of args.platforms) {
   if (platform === 'xiaohongshu') {
     const live = String(cover.background || '').match(/url\(["']?([^"')]+)/)?.[1];
     if (!live) throw new Error('Xiaohongshu fresh evidence has no live cover URL');
-    receipt = { assetPath: pkg.cover.vertical3x4Path, ratio: '3:4', beforeUrl: '', afterUrl: live, recoveredFrom: file };
+    receipt = { assetPath: pkg.cover.horizontal4x3Path, ratio: '4:3', beforeUrl: '', afterUrl: live, recoveredFrom: file };
   } else {
     const portrait = cover.urls?.portrait?.find(Boolean);
     const landscape = cover.urls?.landscape?.find(Boolean);

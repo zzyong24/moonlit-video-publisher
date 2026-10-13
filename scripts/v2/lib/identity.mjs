@@ -24,10 +24,12 @@ export async function buildIdentity(pkg) {
   const paths = [
     pkg.cover?.vertical3x4Path,
     pkg.cover?.horizontal4x3Path,
+    pkg.bilibiliWideCoverPath,
+    ...Object.values(pkg.cover?.platformAssets || {}).flatMap(assets => Array.isArray(assets) ? assets.map(asset => asset.path) : []),
   ].filter(Boolean).map(value => path.resolve(value));
   const video = { path: videoPath, size: (await fs.promises.stat(videoPath)).size, sha256: await hashFile(videoPath) };
   const assets = [];
-  for (const assetPath of paths) {
+  for (const assetPath of [...new Set(paths)]) {
     const stat = await fs.promises.stat(assetPath);
     assets.push({ path: assetPath, size: stat.size, sha256: await hashFile(assetPath) });
   }

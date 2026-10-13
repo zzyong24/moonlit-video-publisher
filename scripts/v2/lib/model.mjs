@@ -17,19 +17,19 @@ export const BLOCKER = Object.freeze({
 const REQUIRED_GATES = Object.freeze({
   xiaohongshu: [
     "authenticated", "draftIdentity", "video", "title", "tags", "original",
-    "cover", "noBlockingDialog", "finalButton", "safety",
+    "cover", "noBlockingDialog", "finalButton", "safety", "publishReview",
   ],
   douyin: [
     "authenticated", "draftIdentity", "video", "title", "description", "tags",
-    "settings", "cover", "noBlockingDialog", "finalButton", "safety",
+    "settings", "cover", "noBlockingDialog", "finalButton", "safety", "publishReview",
   ],
   bilibili: [
     "authenticated", "draftIdentity", "video", "title", "description", "tags",
-    "original", "cover", "noBlockingDialog", "finalButton", "safety",
+    "original", "cover", "noBlockingDialog", "finalButton", "safety", "publishReview",
   ],
   wechat_channels: [
     "authenticated", "draftIdentity", "video", "description", "shortTitle", "original",
-    "cover", "noBlockingDialog", "finalButton", "safety",
+    "contentDeclaration", "cover", "noBlockingDialog", "finalButton", "safety", "publishReview",
   ],
 });
 
@@ -122,6 +122,7 @@ export function classifyVerdict(verdict) {
     return verdict.platform === "bilibili" ? "needs_quarantine" : "blocked_foreign_draft";
   }
   if (verdict.gates.video?.ok !== true) return "needs_upload";
+  if (verdict.missing?.length === 1 && verdict.missing[0] === "publishReview") return "needs_review";
   return "needs_mutation";
 }
 

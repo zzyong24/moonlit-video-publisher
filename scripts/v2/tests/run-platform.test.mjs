@@ -12,13 +12,27 @@ const V2_DIR=path.dirname(DIR);
 
 function run(command,args,options){return new Promise((resolve,reject)=>{const child=spawn(command,args,{...options,stdio:["ignore","pipe","pipe"]});let stdout="",stderr="";child.stdout.on("data",chunk=>{stdout+=chunk});child.stderr.on("data",chunk=>{stderr+=chunk});child.on("error",reject);child.on("close",code=>resolve({code,stdout,stderr}))})}
 
+test("upload without guoshen review fails before any browser process",async()=>{
+  const root=await fs.promises.mkdtemp(path.join(os.tmpdir(),"video guoshen gate "));
+  try {
+    const videoPath=path.join(root,"sample.mp4"),packagePath=path.join(root,"package.json"),configPath=path.join(root,"config.json");
+    await fs.promises.writeFile(videoPath,"test video fixture");
+    await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Review gate",xhsTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"fixture"}}));
+    await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["xiaohongshu"],declarations:{originalityPolicy:"all_videos_original"}}));
+    const env={...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_EGO_COMMAND:"must-not-run-browser"};
+    delete env.MOONLIT_GUOSHEN_GATE;delete env.MOONLIT_GUOSHEN_DIR;delete env.MOONLIT_GUOSHEN_RECEIPT;
+    const result=await run(process.execPath,[path.join(V2_DIR,"run-platform.mjs"),"xiaohongshu",packagePath,"upload"],{env});
+    assert.notEqual(result.code,0);assert.match(result.stderr,/guoshen review/);assert.doesNotMatch(result.stderr,/ENOENT/);
+  } finally {await fs.promises.rm(root,{recursive:true,force:true});}
+});
+
 test("platform runner turns an Ego process failure into structured page evidence",async()=>{
   const root=await fs.promises.mkdtemp(path.join(os.tmpdir(),"video-publisher-v2-ego-failure-test-"));
   const videoPath=path.join(root,"sample.mp4");
   const packagePath=path.join(root,"package.json");
   const configPath=path.join(root,"config.json");
   await fs.promises.writeFile(videoPath,"test video fixture");
-  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Ego failure",xhsTopics:["Test"],cover:{uploadCustomCover:false}}));
+  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Ego failure",xhsTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["xiaohongshu"],declarations:{originalityPolicy:"all_videos_original"}}));
   const result=await run(process.execPath,[path.join(V2_DIR,"run-platform.mjs"),"xiaohongshu",packagePath,"inspect","ego-failure","123"],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_EGO_COMMAND:"video-publisher-missing-ego-command"}});
   assert.equal(result.code,0,`${result.stderr}\n${result.stdout}`);
@@ -37,7 +51,7 @@ test("platform runner recognizes Ego's real user-takeover wording",async()=>{
   const configPath=path.join(root,"config.json");
   const fakeEgoPath=path.join(root,"fake-ego");
   await fs.promises.writeFile(videoPath,"test video fixture");
-  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"User takeover",xhsTopics:["Test"],cover:{uploadCustomCover:false}}));
+  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"User takeover",xhsTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["xiaohongshu"],declarations:{originalityPolicy:"all_videos_original"}}));
   await fs.promises.writeFile(fakeEgoPath,"#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' 'The user has taken control of this task space. Wait for them to finish.' >&2\nexit 1\n");
   await fs.promises.chmod(fakeEgoPath,0o755);

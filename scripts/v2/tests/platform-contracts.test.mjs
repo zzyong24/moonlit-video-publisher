@@ -7,6 +7,35 @@ import { fileURLToPath } from "node:url";
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const PLATFORM_DIR = path.join(DIR, "..", "platforms");
 
+test('Xiaohongshu unchecked simulator never counts as original enabled',()=>{
+  const source=fs.readFileSync(path.join(PLATFORM_DIR,'xiaohongshu.mjs'),'utf8');
+  const match=source.match(/\|\| (\/.*?\/).test\(String\(simulator\?\.className/);
+  assert.ok(match,'simulator state matcher exists');
+  const re=new RegExp(match[1].slice(1,-1));
+  assert.equal(re.test('d-switch-simulator unchecked --color-bg-fill'),false);
+  assert.equal(re.test('d-switch-simulator checked --color-bg-fill'),true);
+  assert.equal(re.test('not-checked inactive disabled'),false);
+});
+
+test('cover repairs resolve modern task handles and wait for native image processing',()=>{
+  const xhs=fs.readFileSync(path.join(PLATFORM_DIR,'xiaohongshu.mjs'),'utf8');
+  const bili=fs.readFileSync(path.join(PLATFORM_DIR,'bilibili.mjs'),'utf8');
+  assert.match(xhs,/await taskSpace\(activeTaskSpace.id\)/);
+  assert.doesNotMatch(xhs,/activeTaskSpace\?\.page/);
+  assert.match(xhs,/poll<60&&!control.ok/);
+  assert.match(xhs,/JSON.stringify\(xhsCoverRatio\)/);
+  assert.match(bili,/coverTask.adopt\(coverTab.page\)/);
+  assert.match(bili,/coverPage.hover\('.cover-content .cover-img'\)/);
+});
+
+test('Bilibili topic-only tags use exact native topic selection, never substitute',()=>{
+  const source=fs.readFileSync(path.join(PLATFORM_DIR,'bilibili.mjs'),'utf8');
+  assert.match(source,/当前tag为话题专用/);
+  assert.match(source,/ensureBilibiliExactTopic\(tag\)/);
+  assert.match(source,/innerText.split\('\\n'\)\[0\].trim\(\).toLowerCase\(\)===tag.toLowerCase\(\)/);
+  assert.match(source,/chips\?\.some\(chip=>chip.toLowerCase\(\)===tag.toLowerCase\(\)\)/);
+});
+
 test("Xiaohongshu topics start through the native editor command", () => {
   const source = fs.readFileSync(path.join(PLATFORM_DIR, "xiaohongshu.mjs"), "utf8");
   const start = source.indexOf("async function rebuildXhsTopics");

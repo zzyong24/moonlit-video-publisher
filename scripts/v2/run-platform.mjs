@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   readPackage,
+  coverAssetsForPlatform,
   validateBilibiliPackage,
   validateDouyinPackage,
   validateWechatChannelsPackage,
@@ -74,6 +75,26 @@ const pkg = readPackage(packagePath);
 const errors = validators[platform](pkg);
 if (errors.length) throw new Error(`Package preflight failed for ${platform}: ${errors.join("; ")}`);
 if (!fs.existsSync(pkg.videoPath)) throw new Error(`Video file not found: ${pkg.videoPath}`);
+function reviewGate(stage, required = false) {
+  const gate = process.env.MOONLIT_GUOSHEN_GATE;
+  const receipt = process.env.MOONLIT_GUOSHEN_RECEIPT;
+  const guoshenDir = process.env.MOONLIT_GUOSHEN_DIR;
+  if (!gate || !receipt || !guoshenDir) {
+    if (required) throw new Error("guoshen review gate/receipt/dir required before preparation or READY");
+    return { ok: false, stage, reason: "final guoshen receipt not provided" };
+  }
+  const files = [packagePath, pkg.videoPath, ...coverAssetsForPlatform(pkg, platform).map(asset => asset.path)];
+  const args = [gate, "--stage", stage, "--receipt", receipt, "--guoshen-dir", guoshenDir, "--platform", platform,
+    ...files.flatMap(file => ["--file", path.resolve(file)])];
+  const checked = spawnSync(process.env.MOONLIT_PYTHON || "python3", args, {encoding: "utf8"});
+  const evidence = { ok: checked.status === 0, stage, receipt, detail: checked.stderr || checked.stdout };
+  if (required && !evidence.ok) throw new Error(evidence.detail || "guoshen preflight failed");
+  return evidence;
+}
+if (phase !== "inspect") reviewGate("content", true);
+const finalReview = reviewGate("final");
+
+
 
 const header = [
   'import fs from "node:fs";',
@@ -138,4 +159,6 @@ try {
     },
   };
 }
+result.gates ||= {};
+result.gates.publishReview = { ok: finalReview.ok, evidence: finalReview };
 console.log(V2_RESULT_PREFIX + JSON.stringify(result));

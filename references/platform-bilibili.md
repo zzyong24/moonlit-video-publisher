@@ -46,15 +46,19 @@ Set and independently verify:
 ```text
 exact title
 exact description
-内容无需标注
+package-matched creation declaration (`contentTypeDeclaration=含AI生成内容` -> `含AI生成内容`; an explicit no-mark value maps to `内容无需标注`; new packages must provide the field)
 内容为自制：未经作者允许，禁止转载
 ```
 
-Bilibili may show the self-made value in the input while keeping `内容无需标注` in selected component state. Require both observations.
+Bilibili may show the self-made value in the input while keeping the creation declaration in selected component state. Require both observations. For an explicitly AI-labelled package, `内容无需标注` must not satisfy this gate or be chosen as a fallback when the real AI option is missing. Original/self-made rights and AI-content marking are separate facts. New Bilibili packages require `contentTypeDeclaration`; legacy no-mark fallback must not turn an unknown production record into an unmarked submission.
+
+After changing the creation mark, wait for the native select to settle before reading the separate self-made authorization. Inspect `.auth-content` and its `.option-text-selected`/selected icon: keep an already selected authorization; click its own native control only when off, then independently re-read both declarations. A creation-label change must not toggle an already selected right off or rely on an obsolete component container.
 
 Preserve the current relevant partition unless a confirmed package requires another one. The current production ready model does not claim that it automatically chooses a partition.
 
 ## Tags
+
+For the multiline description, use the actual editor's native Quill `setText(value, 'user')` command only when that exact editor exposes it, then independently re-read every paragraph. A real DOM/execCommand attempt inserted all paragraphs transiently but later persisted only the first line. Missing native-command support must fail closed; never accept an immediate DOM match as saved description evidence.
 
 Read chips directly from `.label-item-v2-container`, not a broad body-text segment.
 
@@ -76,7 +80,7 @@ If Bilibili reports that a requested tag is topic-only and cannot be added as a 
 
 ## Custom Cover
 
-Use the user-provided `4:3` asset only when enabled.
+Use the explicitly mapped primary `4:3` or `16:9` asset only when enabled. Read the actual cover editor labels and accepted crop; a filename or package ratio does not prove the native slot. Additional native placements require separate visual evidence.
 
 Upload through the active `.bcc-upload-wrapper` image input. The cover editor’s final control can be a `div.button.submit`, not a native button. Wait until its exact label becomes `完成`, click it through the real input channel, and require the editor to close.
 
@@ -102,3 +106,5 @@ final publish not clicked
 ```
 
 The complete draft path passed real testing on 2026-07-14, including foreign-draft quarantine, the scoped cover-completion fallback, checkpoint recovery, and repeated no-op verification.
+
+2026-10-04 recovery observations: activate/focus the exact page before tag keyboard entry. A platform rejection saying `当前tag为话题专用` means the same requested tag must be added through `搜索更多话题 >`, using an exact result and the scoped topic-dialog confirmation. Never silently omit or replace it. Fresh verification still requires the resulting real tag chip. For an existing cover, resolve/adopt that same task-space tab, scroll and hover `.cover-content .cover-img`, and click the image to open the editor; a hidden `封面设置` text node is not sufficient. Re-uploading the identical content-addressed asset may keep its CDN URL unchanged, but requires a real upload and successful dialog completion before writing the receipt.

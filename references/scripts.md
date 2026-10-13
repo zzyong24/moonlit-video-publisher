@@ -144,3 +144,5 @@ node --test scripts/tests/*.test.mjs scripts/v2/tests/*.test.mjs
 ```
 
 These tests do not replace real platform acceptance.
+
+Review stages: upload/mutate/quarantine run the content-stage guoshen gate. All observations expose a centrally required publishReview gate checked against the final-stage receipt; content-only drafts may be inspected but remain needs_review, never READY. Final submission always uses the default final gate.

@@ -111,6 +111,7 @@ draftIdentity
 video
 platform metadata and tag/entity gates
 required declarations/settings
+publishReview (final guoshen stage, never content-only)
 cover
 noBlockingDialog
 finalButton

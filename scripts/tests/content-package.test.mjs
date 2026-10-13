@@ -6,7 +6,10 @@ import path from "node:path";
 import {
   coverAssetsForPlatform,
   readPackage,
+  validateCoverPackage,
+  validateBilibiliPackage,
   validateDouyinPackage,
+  validateWechatChannelsPackage,
   validateXiaohongshuPackage,
 } from "../lib/content-package.mjs";
 import { defaultConfig, normalizeConfig } from "../lib/config.mjs";
@@ -58,6 +61,7 @@ test("Douyin topics come from the package instead of account-specific defaults",
     await fs.promises.writeFile(packagePath, JSON.stringify({
       title: "Generic video",
       douyinTopics: ["Automation", "Tutorial"],
+      cover: { uploadCustomCover: false, useVideoFrame: true, approvalEvidence: "test fixture" },
     }));
     const pkg = readPackage(packagePath, { config: defaultConfig() });
     assert.deepEqual(pkg.douyinTopics, ["Automation", "Tutorial"]);
@@ -79,22 +83,85 @@ test("Bilibili automatic-tag allowlist is empty unless the package supplies it",
 
 test("an existing cover asset needs only its file path and ratio", async () => {
   await withTempDir(async root => {
-    const coverPath = path.join(root, "cover-3x4.png");
+    const coverPath = path.join(root, "cover-4x3.png");
     const packagePath = path.join(root, "package.json");
-    await fs.promises.writeFile(coverPath, pngHeader(1080, 1440));
+    await fs.promises.writeFile(coverPath, pngHeader(1440, 1080));
     await fs.promises.writeFile(packagePath, JSON.stringify({
       title: "Generic video",
       xhsTopics: ["Automation"],
       cover: {
         uploadCustomCover: true,
-        vertical3x4Path: coverPath,
+        horizontal4x3Path: coverPath,
       },
     }));
     const pkg = readPackage(packagePath, { config: defaultConfig() });
     assert.deepEqual(validateXiaohongshuPackage(pkg), []);
     assert.deepEqual(coverAssetsForPlatform(pkg, "xiaohongshu"), [
-      { slot: "portrait", ratio: "3:4", path: coverPath },
+      { slot: "landscape", ratio: "4:3", path: coverPath },
     ]);
+  });
+});
+
+test("cover preflight rejects an unresolved or contradictory choice and accepts an explicit frame choice", async () => {
+  await withTempDir(async root => {
+    const unresolvedPath = path.join(root, "unresolved.json");
+    const framePath = path.join(root, "frame.json");
+    const contradictoryPath = path.join(root, "contradictory.json");
+    await fs.promises.writeFile(unresolvedPath, JSON.stringify({ title: "Generic video" }));
+    await fs.promises.writeFile(framePath, JSON.stringify({
+      title: "Generic video",
+      cover: { uploadCustomCover: false, useVideoFrame: true, approvalEvidence: "User accepted the platform frame" },
+    }));
+    await fs.promises.writeFile(contradictoryPath, JSON.stringify({
+      title: "Generic video",
+      cover: { uploadCustomCover: true, useVideoFrame: true, approvalEvidence: "User accepted the platform frame" },
+    }));
+
+    const unresolved = readPackage(unresolvedPath, { config: defaultConfig() });
+    const frame = readPackage(framePath, { config: defaultConfig() });
+    const contradictory = readPackage(contradictoryPath, { config: defaultConfig() });
+
+    assert.match(validateCoverPackage(unresolved, "bilibili")[0], /cover choice is unresolved/);
+    assert.deepEqual(validateCoverPackage(frame, "bilibili"), []);
+    assert.match(validateCoverPackage(contradictory, "bilibili")[0], /cover choice is ambiguous/);
+  });
+});
+
+test("WeChat Channels requires an explicit content mark in its release package", async () => {
+  await withTempDir(async root => {
+    const missingPath = path.join(root, "missing-mark.json");
+    const declaredPath = path.join(root, "declared-mark.json");
+    const base = {
+      title: "Personal AI",
+      wechatDescription: "Personal AI video",
+      wechatTags: ["AI"],
+      cover: { uploadCustomCover: false, useVideoFrame: true, approvalEvidence: "approved frame" },
+    };
+    await fs.promises.writeFile(missingPath, JSON.stringify(base));
+    await fs.promises.writeFile(declaredPath, JSON.stringify({ ...base, contentTypeDeclaration: "含AI生成内容" }));
+    const missing = readPackage(missingPath, { config: defaultConfig() });
+    const declared = readPackage(declaredPath, { config: defaultConfig() });
+    assert.match(validateWechatChannelsPackage(missing).join("; "), /contentTypeDeclaration is required/);
+    assert.deepEqual(validateWechatChannelsPackage(declared), []);
+  });
+});
+
+test("Bilibili requires an explicit content mark in its release package", async () => {
+  await withTempDir(async root => {
+    const missingPath = path.join(root, "missing-bilibili-mark.json");
+    const declaredPath = path.join(root, "declared-bilibili-mark.json");
+    const base = {
+      title: "Personal AI",
+      bilibiliDescription: "Personal AI video",
+      bilibiliTags: ["AI"],
+      cover: { uploadCustomCover: false, useVideoFrame: true, approvalEvidence: "approved frame" },
+    };
+    await fs.promises.writeFile(missingPath, JSON.stringify(base));
+    await fs.promises.writeFile(declaredPath, JSON.stringify({ ...base, contentTypeDeclaration: "含AI生成内容" }));
+    const missing = readPackage(missingPath, { config: defaultConfig() });
+    const declared = readPackage(declaredPath, { config: defaultConfig() });
+    assert.match(validateBilibiliPackage(missing).join("; "), /contentTypeDeclaration is required/);
+    assert.deepEqual(validateBilibiliPackage(declared), []);
   });
 });
 
@@ -137,5 +204,39 @@ test("Douyin preflight accepts 15:00 container rounding and rejects longer media
     assert.deepEqual(validateMediaForPlatform({ videoPath: acceptedPath }, "douyin"), []);
     assert.match(validateMediaForPlatform({ videoPath: rejectedPath }, "douyin")[0], /DOUYIN_DURATION_LIMIT/);
     assert.deepEqual(validateMediaForPlatform({ videoPath: rejectedPath }, "xiaohongshu"), []);
+  });
+});
+
+
+test("explicit platform cover mapping preserves portrait and wide artwork without fixed 4:3 substitution", async () => {
+  await withTempDir(async root => {
+    const portrait = path.join(root, "portrait.png"), wide = path.join(root, "wide.png"), packagePath = path.join(root, "package.json");
+    await fs.promises.writeFile(portrait, pngHeader(1080, 1440));
+    await fs.promises.writeFile(wide, pngHeader(1920, 1080));
+    await fs.promises.writeFile(packagePath, JSON.stringify({title:"Generic video", xhsTopics:["Test"], bilibiliDescription:"description", bilibiliTags:["Test"], contentTypeDeclaration:"含AI生成内容", cover:{uploadCustomCover:true, horizontal4x3Path:"must-not-fallback", platformAssets:{xiaohongshu:[{slot:"portrait",ratio:"3:4",path:portrait}],bilibili:[{slot:"landscape",ratio:"16:9",path:wide}]}}}));
+    const pkg = readPackage(packagePath, {config:defaultConfig()});
+    assert.deepEqual(validateXiaohongshuPackage(pkg), []);
+    assert.deepEqual(validateBilibiliPackage(pkg), []);
+    assert.equal(coverAssetsForPlatform(pkg,"xiaohongshu")[0].path,portrait);
+    assert.equal(coverAssetsForPlatform(pkg,"bilibili")[0].ratio,"16:9");
+    pkg.cover.platformAssets.xiaohongshu=[];
+    assert.match(validateXiaohongshuPackage(pkg).join(";"), /no cover asset/);
+    pkg.cover.platformAssets.xiaohongshu=[{slot:"portrait",ratio:"3:4",path:wide}];
+    assert.match(validateXiaohongshuPackage(pkg).join(";"), /ratio mismatch/);
+  });
+});
+
+
+test("Bilibili dual-slot correction binds and validates the independent 16:9 file", async () => {
+  await withTempDir(async root => {
+    const main=path.join(root,"main.png"),wide=path.join(root,"wide.png"),pkgPath=path.join(root,"package.json");
+    await fs.promises.writeFile(main,pngHeader(1440,1080));await fs.promises.writeFile(wide,pngHeader(1920,1080));
+    await fs.promises.writeFile(pkgPath,JSON.stringify({title:"Test",bilibiliTags:["Test"],bilibiliDescription:"Test",contentTypeDeclaration:"含AI生成内容",bilibiliWideCoverPath:wide,cover:{uploadCustomCover:true,horizontal4x3Path:main}}));
+    const pkg=readPackage(pkgPath,{config:defaultConfig()});
+    assert.deepEqual(validateBilibiliPackage(pkg),[]);
+    assert.deepEqual(coverAssetsForPlatform(pkg,"bilibili").map(a=>a.ratio),["4:3","16:9"]);
+    assert.equal(Object.hasOwn(pkg.cover,"platformAssets"),false);
+    await fs.promises.writeFile(wide,pngHeader(1440,1080));
+    assert.match(validateBilibiliPackage(pkg).join(";"),/ratio mismatch/);
   });
 });

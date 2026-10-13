@@ -6,7 +6,11 @@ Read `platform-common.md` and `ego-browser-workflow.md` first.
 
 Use the 1-5 topic entities supplied by `douyinTopics`, in order. Do not inject account campaigns or personal recurring tags that are absent from the package.
 
+If the user adds required campaign topics during a run, make them explicit in a versioned package and keep the total at five or fewer by removing lower-priority optional topics. Confirm each campaign as a committed platform topic or activity entity; plain `#文字` in the editor is insufficient.
+
 ## Draft And Editor Recovery
+
+After login, `/creator-micro/content/upload` may first render the creator home page with `发布高清视频` and no file input. Use that exact entry once, wait for the actual video input, and re-inspect draft identity before uploading. A missing input on the home page is not by itself selector drift.
 
 Before opening Ego Lite, read MP4/M4V/MOV duration from its ISO BMFF `mvhd` metadata. Reject content longer than 900 seconds with `DOUYIN_DURATION_LIMIT`, allowing only 0.1 seconds for container-metadata rounding. This boundary is real-tested: a 15:09 HEVC source produced two explicit platform upload failures, a 14:59 stream copy from the same file uploaded successfully, and an exact 15:00 stream copy reported 900.010 seconds yet also uploaded successfully. All three kept the same codec, resolution, frame rate, bitrate, and approximately 1.11 GB size. Do not auto-trim or transcode; ask for a shorter export. Do not apply this Douyin-only limit to other platforms.
 
@@ -59,6 +63,10 @@ The landscape card may update after the completion control closes. Wait until bo
 
 Persist the completed two-slot receipt through the shared atomic checkpoint before returning the mutation result. If both live slots are already distinct but no matching receipt/checkpoint exists, block instead of treating URL distinctness as proof of local-asset identity.
 
+## AI Content Declaration
+
+For confirmed generated images or video, use the current editor’s native `自主声明` control and select its actual AI-content option (the 2026-10-09 editor exposed `内容由AI生成`). The wording must come from a fresh snapshot; do not guess a permanent label. Close the menu and verify the selected native state separately from originality, description text and runner READY. Until the adapter implements and live-tests this gate, do this through the guarded manual recovery path and save the actual state for the final review. Absence or ambiguity blocks submission; no-generated-content records do not require an AI mark.
+
 ## Required Gates
 
 ```text
@@ -68,6 +76,7 @@ video fully uploaded
 exact title and body
 the exact requested real topic entities, no residue or duplicates
 不同时发布 selected
+required native AI content declaration independently verified
 two distinct custom-cover receipts when enabled
 no blocking dialog
 visible enabled 发布 button

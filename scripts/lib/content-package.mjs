@@ -62,7 +62,9 @@ export function getImageDimensions(filePath) {
 export function ratioOk(dimensions, expected) {
   if (!dimensions.width || !dimensions.height) return false;
   const actual = dimensions.width / dimensions.height;
-  const target = expected === "3:4" ? 3 / 4 : 4 / 3;
+  const ratios = { "3:4": 3 / 4, "4:3": 4 / 3, "16:9": 16 / 9, "9:16": 9 / 16 };
+  const target = ratios[expected];
+  if (!target) return false;
   return Math.abs(actual - target) < 0.01;
 }
 
@@ -72,15 +74,22 @@ export function coverUploadEnabled(cover = {}) {
 
 export function coverAssetsForPlatform(pkg, platform) {
   const cover = pkg.cover || {};
+  if (Object.hasOwn(cover.platformAssets || {}, platform)) {
+    const assets = cover.platformAssets[platform];
+    return Array.isArray(assets) ? assets.map(asset => ({ slot: String(asset.slot || ""), ratio: String(asset.ratio || ""), path: String(asset.path || "").trim() })) : [];
+  }
   const verticalPath = String(cover.vertical3x4Path || "").trim();
   const horizontalPath = String(cover.horizontal4x3Path || "").trim();
   const mapping = {
-    xiaohongshu: verticalPath ? [{ slot: "portrait", ratio: "3:4", path: verticalPath }] : [],
+    xiaohongshu: horizontalPath ? [{ slot: "landscape", ratio: "4:3", path: horizontalPath }] : [],
     wechat_channels: [
       ...(verticalPath ? [{ slot: "portrait", ratio: "3:4", path: verticalPath }] : []),
       ...(horizontalPath ? [{ slot: "landscape", ratio: "4:3", path: horizontalPath }] : []),
     ],
-    bilibili: horizontalPath ? [{ slot: "landscape", ratio: "4:3", path: horizontalPath }] : [],
+    bilibili: [
+      ...(horizontalPath ? [{ slot: "landscape", ratio: "4:3", path: horizontalPath }] : []),
+      ...(pkg.bilibiliWideCoverPath ? [{ slot: "wide", ratio: "16:9", path: String(pkg.bilibiliWideCoverPath).trim() }] : []),
+    ],
     douyin: [
       ...(verticalPath ? [{ slot: "portrait", ratio: "3:4", path: verticalPath }] : []),
       ...(horizontalPath ? [{ slot: "landscape", ratio: "4:3", path: horizontalPath }] : []),
@@ -108,8 +117,11 @@ export function readPackage(packagePath, { config: suppliedConfig } = {}) {
   const wechatDescription = normalizeDescription(parsed.wechatDescription || parsed.description || "");
   const cover = {
     uploadCustomCover: parsed.cover?.uploadCustomCover === true,
+    ...(Object.hasOwn(parsed.cover || {}, "platformAssets") ? { platformAssets: parsed.cover.platformAssets } : {}),
     vertical3x4Path: String(parsed.cover?.vertical3x4Path || "").trim(),
     horizontal4x3Path: String(parsed.cover?.horizontal4x3Path || "").trim(),
+    useVideoFrame: parsed.cover?.useVideoFrame === true,
+    approvalEvidence: String(parsed.cover?.approvalEvidence || "").trim(),
   };
   const douyinTopicSource = Array.isArray(parsed.douyinTopics)
     ? parsed.douyinTopics
@@ -157,7 +169,16 @@ export function validateCommonPackage(pkg) {
 export function validateCoverPackage(pkg, platform) {
   const errors = [];
   const cover = pkg.cover || {};
-  if (!coverUploadEnabled(cover)) return errors;
+  if (!coverUploadEnabled(cover)) {
+    if (cover.useVideoFrame !== true || !String(cover.approvalEvidence || "").trim()) {
+      errors.push("cover choice is unresolved: enable an approved custom cover or record explicit user acceptance of the platform video frame");
+    }
+    return errors;
+  }
+  if (cover.useVideoFrame === true) {
+    errors.push("cover choice is ambiguous: custom cover upload and platform video frame are both selected");
+    return errors;
+  }
   const assets = coverAssetsForPlatform(pkg, platform);
   if (!assets.length) {
     errors.push(`custom cover upload enabled, but no cover asset is mapped for ${platform}`);
@@ -169,7 +190,12 @@ export function validateCoverPackage(pkg, platform) {
   if (platform === "wechat_channels" && assets.length !== 2) {
     errors.push("wechat_channels custom cover upload requires both 3:4 personal-profile and 4:3 share-card covers");
   }
+  const allowed = { xiaohongshu: { portrait: ["3:4"], landscape: ["4:3"] }, bilibili: { landscape: ["4:3", "16:9"], wide: ["16:9"] }, douyin: { portrait: ["3:4"], landscape: ["4:3"] }, wechat_channels: { portrait: ["3:4"], landscape: ["4:3"] } };
+  if (platform === "xiaohongshu" && assets.length !== 1) errors.push(`${platform} automatic cover adapter requires one explicit primary slot; additional native slots need separately verified evidence`);
+  if (platform === "bilibili" && (assets.length > 2 || (assets.length === 2 && !(assets.some(a => a.slot === "landscape" && a.ratio === "4:3") && assets.some(a => a.slot === "wide" && a.ratio === "16:9"))))) errors.push("bilibili dual cover mapping requires 4:3 landscape and 16:9 wide assets");
+  if (new Set(assets.map(a => a.slot)).size !== assets.length) errors.push(`duplicate cover slot for ${platform}`);
   for (const asset of assets) {
+    if (!allowed[platform]?.[asset.slot]?.includes(asset.ratio)) errors.push(`unsupported cover slot/ratio for ${platform}: ${asset.slot} ${asset.ratio}`);
     if (!asset.path || !fs.existsSync(asset.path)) {
       errors.push(`custom cover file not found for ${platform} ${asset.slot}: ${asset.path || "(missing path)"}`);
       continue;
@@ -198,6 +224,7 @@ export function validateDouyinPackage(pkg) {
 export function validateBilibiliPackage(pkg) {
   const errors = validateCommonPackage(pkg);
   errors.push(...validateCoverPackage(pkg, "bilibili"));
+  if (!String(pkg.contentTypeDeclaration || "").trim()) errors.push("contentTypeDeclaration is required for bilibili");
   if (pkg.title.length > 80) errors.push(`bilibili title is ${pkg.title.length}/80`);
   if (!pkg.bilibiliDescription) errors.push("bilibiliDescription is required");
   if (!pkg.bilibiliTags.length) errors.push("bilibiliTags are required");
@@ -219,6 +246,7 @@ export function validateWechatChannelsPackage(pkg) {
   errors.push(...validateCoverPackage(pkg, "wechat_channels"));
   if (!pkg.wechatDescription) errors.push("wechatDescription is required");
   if (!pkg.wechatTags.length) errors.push("wechatTags are required");
+  if (!String(pkg.contentTypeDeclaration || "").trim()) errors.push("contentTypeDeclaration is required for wechat_channels");
   return errors;
 }
 

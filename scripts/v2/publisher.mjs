@@ -160,7 +160,8 @@ async function main() {
     }
     const checkpoint = await store.loadReceiptCheckpoint(platform, state.fingerprint, item.taskSpaceId);
     if (checkpoint) {
-      item.receipts = { ...checkpoint.receipts, ...(item.receipts || {}) };
+      // A valid atomic checkpoint is the newer mutation/recovery receipt.
+      item.receipts = { ...(item.receipts || {}), ...checkpoint.receipts };
       item.receiptTaskSpaceId = checkpoint.taskSpaceId ?? item.receiptTaskSpaceId ?? item.taskSpaceId ?? null;
     }
   }

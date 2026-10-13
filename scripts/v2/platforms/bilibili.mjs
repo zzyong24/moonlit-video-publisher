@@ -5,10 +5,13 @@ const bilibiliAllowedAutoTags = pkg.bilibiliAllowedAutoTags;
 const bilibiliVideoName = videoPath.split('/').pop();
 const bilibiliVideoStem = bilibiliVideoName.replace(/\.[^.]+$/,'');
 const bilibiliCustomCover = pkg.cover?.uploadCustomCover === true;
-const bilibiliCoverPath = String(pkg.cover?.horizontal4x3Path || '');
+const bilibiliMappedCover = pkg.cover?.platformAssets?.bilibili?.[0];
+const bilibiliCoverPath = String(bilibiliMappedCover?.path || pkg.cover?.horizontal4x3Path || '');
+const bilibiliCoverRatio = bilibiliMappedCover?.ratio || '4:3';
+const bilibiliCreationLabel = pkg.contentTypeDeclaration === '含AI生成内容' ? '含AI生成内容' : '内容无需标注';
 
 async function inspectBilibili() {
-  const state=await js(String.raw`((expectedName,expectedStem,expectedTitle,expectedDescription,requestedTags,allowedAutoTags) => {
+  const state=await js(String.raw`((expectedName,expectedStem,expectedTitle,expectedDescription,requestedTags,allowedAutoTags,expectedCreationLabel) => {
     const compact=v=>String(v||'').replace(/\s+/g,' ').trim();const visible=el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return r.width>4&&r.height>4&&s.display!=='none'&&s.visibility!=='hidden'};const text=compact(document.body.innerText||'');
     const title=String([...document.querySelectorAll('input')].find(el=>(el.placeholder||'').includes('稿件标题'))?.value||'').trim();
     const desc=compact([...document.querySelectorAll('.ql-editor[contenteditable="true"],[contenteditable="true"]')].find(el=>/ql-editor/.test(String(el.className||'')))?.innerText||'');
@@ -17,16 +20,17 @@ async function inspectBilibili() {
     const creationInput=String([...document.querySelectorAll('input')].find(el=>(el.placeholder||'').includes('创作声明'))?.value||'');
     const selected=[...document.querySelectorAll('li,div,span,p')].map(el=>({text:compact(el.innerText||el.textContent||''),cls:String(el.className||''),aria:el.getAttribute('aria-selected')})).filter(item=>item.text&&(/selected/i.test(item.cls)||item.aria==='true'));
     const noMark=/内容无需标注/.test(creationInput)||selected.some(item=>item.text==='内容无需标注');const selfMade=/内容为自制|未经作者允许，禁止转载/.test(creationInput)||selected.some(item=>/^内容为自制/.test(item.text)||/未经作者允许，禁止转载/.test(item.text));
+    const creationMarked=creationInput===expectedCreationLabel||selected.some(item=>item.text===expectedCreationLabel);
     const anyUploaded=/上传完成/.test(text);const filenameVisible=text.includes(expectedName)||text.includes(expectedStem);const uploaded=anyUploaded&&filenameVisible;const uploading=/上传中|转码中|上传进度|\d{1,3}%/.test(text)&&!anyUploaded;const failed=/上传失败|网络错误/.test(text);
     const loginRequired=/扫码登录|请登录|登录后|安全验证|验证码/.test(text)&&!/发布视频|内容管理/.test(text);
     const restoreBanner=/本地浏览器存在.*未提交的视频|继续编辑/.test(text);const identityMatches=!restoreBanner&&(!anyUploaded||filenameVisible||title===expectedTitle);
     const coverRoot=document.querySelector('.cover .cover-content,.cover-content');
     const urls=[...(coverRoot?.querySelectorAll('.cover-img,img,[style]')||[])].flatMap(el=>{const values=[];if(el.src)values.push(el.src);const bg=getComputedStyle(el).backgroundImage;const match=bg.match(/url\(["']?([^"')]+)/);if(match)values.push(match[1]);return values}).filter(src=>/blob:|biliimg|archive\.biliimg/.test(src));
     const dialogs=[...document.querySelectorAll('[role="dialog"],.bcc-dialog,.bcc-modal,[class*="modal-mask"],[class*="dialog-mask"]')].map(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {text:compact(el.innerText||el.textContent||'').slice(0,500),cls:String(el.className||''),w:r.width,h:r.height,display:s.display,visibility:s.visibility,opacity:s.opacity}}).filter(item=>item.w>20&&item.h>20&&item.display!=='none'&&item.visibility!=='hidden'&&!(/leave-active/.test(item.cls)&&Number(item.opacity)===0));
-    return {text:text.slice(0,3000),title,desc,chips,missing,duplicates:[...new Set(duplicates)],malformed:[...new Set(malformed)],unexpected:[...new Set(unexpected)],creationInput,noMark,selfMade,anyUploaded,uploaded,uploading,failed,filenameVisible,loginRequired,restoreBanner,identityMatches,coverUrls:[...new Set(urls)],dialogs}
-  })(${JSON.stringify(bilibiliVideoName)},${JSON.stringify(bilibiliVideoStem)},${JSON.stringify(bilibiliTitle)},${JSON.stringify(bilibiliDescription)},${JSON.stringify(bilibiliTags)},${JSON.stringify(bilibiliAllowedAutoTags)})`);
+    return {text:text.slice(0,3000),title,desc,chips,missing,duplicates:[...new Set(duplicates)],malformed:[...new Set(malformed)],unexpected:[...new Set(unexpected)],creationInput,noMark,creationMarked,selfMade,anyUploaded,uploaded,uploading,failed,filenameVisible,loginRequired,restoreBanner,identityMatches,coverUrls:[...new Set(urls)],dialogs}
+  })(${JSON.stringify(bilibiliVideoName)},${JSON.stringify(bilibiliVideoStem)},${JSON.stringify(bilibiliTitle)},${JSON.stringify(bilibiliDescription)},${JSON.stringify(bilibiliTags)},${JSON.stringify(bilibiliAllowedAutoTags)},${JSON.stringify(bilibiliCreationLabel)})`);
   const buttons=await inspectFinalButtons(/^立即投稿$/);const finalButton=buttons.find(button=>button.buttonish)||buttons[0]||null;const receipt=expectedReceipts.cover||null;
-  const customCoverOk=Boolean(bilibiliCustomCover&&receipt&&receipt.assetPath===bilibiliCoverPath&&receipt.ratio==='4:3'&&receipt.afterUrl&&state.coverUrls.includes(receipt.afterUrl));
+  const customCoverOk=Boolean(bilibiliCustomCover&&receipt&&receipt.assetPath===bilibiliCoverPath&&receipt.ratio===bilibiliCoverRatio&&receipt.afterUrl&&state.coverUrls.includes(receipt.afterUrl));
   const defaultCoverOk=!bilibiliCustomCover&&(/封面设置|更换封面|封面/.test(state.text));
   return {gates:{
     authenticated:state.loginRequired?failedGate({loginRequired:true}):okGate({url:PLATFORM_URLS.bilibili}),
@@ -35,7 +39,7 @@ async function inspectBilibili() {
     title:state.title===bilibiliTitle?okGate({expected:bilibiliTitle,actual:state.title}):failedGate({expected:bilibiliTitle,actual:state.title}),
     description:state.desc===compactText(bilibiliDescription)?okGate({expected:bilibiliDescription,actual:state.desc}):failedGate({expected:bilibiliDescription,actual:state.desc}),
     tags:state.missing.length===0&&state.malformed.length===0&&state.duplicates.length===0&&state.unexpected.length===0?okGate({requested:bilibiliTags,chips:state.chips,allowedAuto:bilibiliAllowedAutoTags}):failedGate({requested:bilibiliTags,chips:state.chips,missing:state.missing,malformed:state.malformed,duplicates:state.duplicates,unexpected:state.unexpected,allowedAuto:bilibiliAllowedAutoTags}),
-    original:state.noMark&&state.selfMade?okGate({noMark:true,selfMade:true,inputValue:state.creationInput}):failedGate({noMark:state.noMark,selfMade:state.selfMade,inputValue:state.creationInput}),
+    original:state.creationMarked&&state.selfMade?okGate({expectedLabel:bilibiliCreationLabel,creationMarked:true,noMark:state.noMark,selfMade:true,inputValue:state.creationInput}):failedGate({expectedLabel:bilibiliCreationLabel,creationMarked:state.creationMarked,noMark:state.noMark,selfMade:state.selfMade,inputValue:state.creationInput}),
     cover:customCoverOk||defaultCoverOk?okGate({custom:bilibiliCustomCover,urls:state.coverUrls,receipt}):failedGate({custom:bilibiliCustomCover,urls:state.coverUrls,receipt,reason:bilibiliCustomCover&&!receipt?'custom cover receipt missing':'cover not verified'}),
     noBlockingDialog:state.dialogs.length===0?okGate({active:[]}):failedGate({active:state.dialogs}),
     finalButton:finalButton&&!finalButton.disabled?okGate(finalButton):failedGate({buttons}),
@@ -145,13 +149,70 @@ async function uploadBilibili(){
   return await waitBilibiliUploadCompletion('injected',entry.recovery);
 }
 
-async function setBilibiliDescriptionV2(){return await js(String.raw`((value) => {const editor=[...document.querySelectorAll('.ql-editor[contenteditable="true"]')].find(el=>/ql-editor/.test(String(el.className||'')));if(!editor)return {ok:false,reason:'bilibili description editor missing'};editor.focus();const sel=window.getSelection(),range=document.createRange();range.selectNodeContents(editor);sel.removeAllRanges();sel.addRange(range);document.execCommand('delete',false);document.execCommand('insertText',false,value);editor.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:value}));editor.dispatchEvent(new Event('change',{bubbles:true}));return {ok:String(editor.innerText||editor.textContent||'').replace(/\s+/g,' ').trim()===String(value).replace(/\s+/g,' ').trim(),actual:editor.innerText||''}})(${JSON.stringify(bilibiliDescription)})`)}
+async function setBilibiliDescriptionV2(){
+  const result=await js(String.raw`((value) => {
+    const editor=[...document.querySelectorAll('.ql-editor[contenteditable="true"]')].find(el=>/ql-editor/.test(String(el.className||'')));
+    if(!editor)return {ok:false,reason:'bilibili description editor missing'};
+    const quill=editor.parentElement?.__quill;
+    if(typeof quill?.setText!=='function')return {ok:false,reason:'bilibili native Quill description command unavailable'};
+    editor.focus();
+    quill.setText(value,'user');
+    const actual=String(editor.innerText||editor.textContent||'');
+    return {ok:actual.replace(/\s+/g,' ').trim()===String(value).replace(/\s+/g,' ').trim(),actual,nativeQuillCommand:true};
+  })(${JSON.stringify(bilibiliDescription)})`);
+  await wait(1);
+  const after=await inspectBilibili();
+  return {...result,ok:after.gates.description.ok,evidence:after.gates.description.evidence};
+}
 
-async function ensureBilibiliDeclarationV2(){const result=await js(String.raw`(() => {const compact=v=>String(v||'').replace(/\s+/g,' ').trim();const input=[...document.querySelectorAll('input')].find(el=>(el.placeholder||'').includes('创作声明'));const select=input?.closest('.bcc-select');let noMark=false;const option=[...(select?.querySelectorAll('.bcc-option')||[])].find(el=>compact(el.innerText||el.textContent||'')==='内容无需标注');if(/内容无需标注/.test(input?.value||''))noMark=true;else if(select?.__vue__&&option?.__vue__?.selectOptionClick){option.__vue__.selectOptionClick();noMark=/内容无需标注/.test(input?.value||select.__vue__.selectedLabel||'')}else{(input?.closest('.bcc-select-input-wrap')||select||input)?.click();const visible=[...document.querySelectorAll('.bcc-option')].find(el=>compact(el.innerText||el.textContent||'')==='内容无需标注');visible?.click();noMark=/内容无需标注/.test(input?.value||'')}
-const container=[...document.querySelectorAll('.creation-statement-container')].find(el=>compact(el.innerText||el.textContent||'').includes('内容为自制'));let selfMade=Boolean(container?.__vue__?.isAuthChecked);if(!selfMade&&typeof container?.__vue__?.handleAuthCheckboxClick==='function'){container.__vue__.handleAuthCheckboxClick({stopPropagation(){},preventDefault(){},target:container});selfMade=Boolean(container.__vue__.isAuthChecked)}if(!selfMade){const target=[...document.querySelectorAll('.auth-content,.option-text,label,span,div')].find(el=>compact(el.innerText||el.textContent||'').startsWith('内容为自制'));(target?.closest('label,[class*="radio"],[class*="check"],.auth-content')||target)?.click()}
-return {ok:noMark&&(selfMade||Boolean(container?.__vue__?.isAuthChecked)),noMark,selfMade:Boolean(selfMade||container?.__vue__?.isAuthChecked)}})()`);await wait(1);const after=await inspectBilibili();return {...result,ok:after.gates.original.ok,evidence:after.gates.original.evidence}}
+async function ensureBilibiliDeclarationV2(){
+  const creation=await js(String.raw`((desiredLabel) => {
+    const compact=v=>String(v||'').replace(/\s+/g,' ').trim();
+    const input=[...document.querySelectorAll('input')].find(el=>(el.placeholder||'').includes('创作声明'));
+    const select=input?.closest('.bcc-select');
+    let creationMarked=input?.value===desiredLabel;
+    const option=[...(select?.querySelectorAll('.bcc-option')||[])].find(el=>compact(el.innerText||el.textContent||'')===desiredLabel);
+    if(!creationMarked){
+      if(!option)return {ok:false,reason:'bilibili requested creation declaration missing',desiredLabel};
+      if(select?.__vue__&&option?.__vue__?.selectOptionClick){
+        option.__vue__.selectOptionClick();
+        creationMarked=input?.value===desiredLabel||select.__vue__.selectedLabel===desiredLabel;
+      }else{
+        (input?.closest('.bcc-select-input-wrap')||select||input)?.click();
+        const visible=[...document.querySelectorAll('.bcc-option')].find(el=>compact(el.innerText||el.textContent||'')===desiredLabel);
+        visible?.click();
+        creationMarked=input?.value===desiredLabel;
+      }
+    }
+    return {ok:creationMarked,desiredLabel};
+  })(${JSON.stringify(bilibiliCreationLabel)})`);
+  if(!creation.ok)return creation;
+  // The native select can reset rights state on its next render. Let that
+  // render settle before reading or changing the separate author declaration.
+  await wait(1);
+  const rights=await js(String.raw`(() => {
+    const compact=v=>String(v||'').replace(/\s+/g,' ').trim();
+    const auth=[...document.querySelectorAll('.auth-content')].find(el=>compact(el.innerText||el.textContent||'').startsWith('内容为自制'));
+    if(auth){
+      const checked=Boolean(auth.querySelector('.option-text-selected,.option-icon')||auth.getAttribute('aria-checked')==='true');
+      if(!checked)auth.click();
+      return {found:true,already:checked};
+    }
+    const container=[...document.querySelectorAll('.creation-statement-container')].find(el=>compact(el.innerText||el.textContent||'').includes('内容为自制'));
+    if(container?.__vue__?.isAuthChecked)return {found:true,already:true};
+    if(typeof container?.__vue__?.handleAuthCheckboxClick==='function'){
+      container.__vue__.handleAuthCheckboxClick({stopPropagation(){},preventDefault(){},target:container});
+      return {found:true,already:false};
+    }
+    return {found:false,reason:'bilibili self-made declaration control missing'};
+  })()`);
+  await wait(1);
+  const after=await inspectBilibili();
+  return {...creation,rights,ok:after.gates.original.ok,evidence:after.gates.original.evidence};
+}
 
 async function rebuildBilibiliTagsV2(){
+  await activateBilibiliUploadLifecycle();
   const removed=[];
   for(let pass=0;pass<12;pass+=1){const current=await inspectBilibili();const unexpected=current.gates.tags.evidence?.unexpected||[];if(!unexpected.length)break;const target=unexpected[0];const result=await js(String.raw`((target) => {const compact=v=>String(v||'').replace(/\s+/g,' ').trim();const el=[...document.querySelectorAll('#tag-container .tag-pre-wrp .label-item-v2-container')].find(el=>compact(el.querySelector('.label-item-v2-content')?.innerText||el.innerText||el.textContent||'').toLowerCase()===String(target).toLowerCase());if(!el)return {ok:false,reason:'unexpected bilibili tag chip missing',target};if(typeof el.__vue__?.close==='function')el.__vue__.close();else{const close=el.querySelector('.close,[class*="close"],svg');if(!close)return {ok:false,reason:'bilibili tag close control missing',target};close.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}))}return {ok:true,target}})(${JSON.stringify(target)})`);if(!result.ok)return {ok:false,reason:result.reason,removed,evidence:current.gates.tags.evidence};removed.push(target);await wait(.8)}
   const attempts=[];
@@ -178,15 +239,57 @@ async function rebuildBilibiliTagsV2(){
       }
       attempts.push({tag,attempt,committed});
     }
+    if(!committed){
+      const topicOnly=await js(String.raw`(() => /当前tag为话题专用/.test(document.body.innerText||''))()`);
+      if(topicOnly){
+        const topic=await ensureBilibiliExactTopic(tag);
+        attempts.push({tag,topic});
+        current=await inspectBilibili();
+        committed=topic.ok&&current.gates.tags.evidence?.chips?.some(chip=>chip.toLowerCase()===tag.toLowerCase());
+      }
+    }
     if(!committed)return {ok:false,reason:`bilibili tag did not persist: ${tag}`,removed,attempts,evidence:current.gates.tags.evidence};
   }
   const after=await inspectBilibili();
   return after.gates.tags.ok?{ok:true,removed,attempts}:{ok:false,reason:'bilibili tag set is not exact',removed,attempts,evidence:after.gates.tags.evidence};
 }
 
+async function ensureBilibiliExactTopic(tag){
+  await activateBilibiliUploadLifecycle();
+  await click('text="搜索更多话题 >"');
+  await click('.bcc-search-input');
+  await cdp('Input.insertText',{text:tag});
+  await pressKey('Enter');
+  let found={ok:false};
+  for(let poll=0;poll<20&&!found.ok;poll+=1){
+    await wait(.5);
+    found=await js(String.raw`((tag)=>{const item=[...document.querySelectorAll('.topic-card')].find(el=>el.innerText.split('\n')[0].trim().toLowerCase()===tag.toLowerCase()&&el.getBoundingClientRect().width>20);if(!item)return {ok:false};item.id='vp2-bili-exact-topic';return {ok:true}})(${JSON.stringify(tag)})`);
+  }
+  if(!found.ok)return {ok:false,reason:'bilibili exact topic suggestion missing',tag};
+  await click('#vp2-bili-exact-topic');
+  await click('.bcc-dialog button.submit-add');
+  await wait(2);
+  const after=await inspectBilibili();
+  return {ok:Boolean(after.gates.tags.evidence?.chips?.some(chip=>chip.toLowerCase()===tag.toLowerCase())),tag};
+}
+
 async function uploadBilibiliCoverV2(){
   if(!bilibiliCustomCover)return {ok:true,skipped:true};
-  const before=(await inspectBilibili()).gates.cover.evidence?.urls||[];
+  const initial = await inspectBilibili();
+  if (initial.gates.cover.ok) return {ok:true,already:true,receipt:expectedReceipts.cover};
+  const before=initial.gates.cover.evidence?.urls||[];
+  await activateBilibiliUploadLifecycle();
+  const coverTask=await taskSpace(activeTaskSpace.id);
+  const coverTab=(await coverTask.tabs()).find(item=>/member\.bilibili\.com/.test(item.url||''));
+  const coverPage=coverTab?.label?coverTask.page(coverTab.label):coverTab?await coverTask.adopt(coverTab.page):null;
+  if(coverPage){
+    const hasImage=await js(String.raw`(() => Boolean(document.querySelector('.cover-content .cover-img')))()`);
+    if(hasImage){
+      await js(String.raw`(() => document.querySelector('.cover-content .cover-img').scrollIntoView({block:'center'}))()`);
+      await coverPage.hover('.cover-content .cover-img').catch(()=>{});
+      await coverPage.click('.cover-content .cover-img').catch(()=>{});
+    }
+  }
   const opened=await js(String.raw`(() => {const c=v=>String(v||'').replace(/\s+/g,' ').trim();const active=[...document.querySelectorAll('.bcc-dialog,.bcc-modal,[role="dialog"]')].find(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return r.width>20&&r.height>20&&s.display!=='none'&&s.visibility!=='hidden'&&/封面/.test(c(el.innerText||el.textContent||''))});if(active)return {ok:true,alreadyOpen:true};const target=[...document.querySelectorAll('button,[role="button"],div,span')].filter(el=>/^(添加封面|更换封面|封面设置|上传封面)$/.test(c(el.innerText||el.textContent||''))&&el.getBoundingClientRect().width>8).sort((a,b)=>a.getBoundingClientRect().width*a.getBoundingClientRect().height-b.getBoundingClientRect().width*b.getBoundingClientRect().height)[0];if(!target)return {ok:false,reason:'bilibili cover entry missing'};target.click();return {ok:true}})()`);
   if(!opened.ok)return opened;
   await wait(2);
@@ -223,7 +326,7 @@ async function uploadBilibiliCoverV2(){
   const afterUrl=after.find(url=>!before.includes(url))||after.find(url=>/archive\.biliimg|biliimg/.test(url))||after[0];
   if(!dialogClosed)return {ok:false,reason:'bilibili cover editor did not close after confirmation',before,after,frameworkFallbackUsed};
   if(!afterUrl)return {ok:false,reason:'bilibili main cover did not expose CDN receipt',before,after};
-  return {ok:true,frameworkFallbackUsed,primaryClickError,receipt:{assetPath:bilibiliCoverPath,ratio:'4:3',beforeUrls:before,afterUrl}};
+  return {ok:true,frameworkFallbackUsed,primaryClickError,receipt:{assetPath:bilibiliCoverPath,ratio:bilibiliCoverRatio,beforeUrls:before,afterUrl}};
 }
 
 async function mutateBilibili(){
@@ -247,6 +350,7 @@ async function mutateBilibili(){
     else{receipts.cover=actions.cover.receipt;expectedReceipts.cover=receipts.cover}
   }else if(bilibiliCustomCover){
     actions.cover={ok:true,skipped:true,reason:'already_verified'};
+    receipts.cover=expectedReceipts.cover;
   }
   actions.receiptCheckpoint=checkpointReceipts(receipts);
   const after=await inspectBilibili();

@@ -117,6 +117,27 @@ async function waitExistingDouyinUpload() {
 
 async function uploadDouyin() {
   let before=await inspectDouyin();
+  // An authenticated visit to /content/upload can briefly show the creator
+  // home page. Enter its explicit video-upload route once, then wait for the
+  // real file input; do not classify that landing page as selector drift.
+  let enteredUpload=false;
+  for(let index=0;index<15;index+=1){
+    const entry=await js(String.raw`(() => {
+      const compact=value=>String(value||'').replace(/\s+/g,' ').trim()
+      const input=[...document.querySelectorAll('input[type=file]')].some(el=>/video|\.mp4|\.mov|\.mkv|\.flv/i.test(el.accept||''))
+      if(input)return {input:true}
+      const button=[...document.querySelectorAll('button')].find(el=>compact(el.innerText||el.textContent||'').startsWith('发布高清视频')&&el.getBoundingClientRect().width>30)
+      if(button){button.id='vp2-douyin-upload-entry';return {input:false,entry:true}}
+      return {input:false,entry:false}
+    })()`);
+    if(entry.input||before.gates.video.ok||before.gates.video.evidence?.uploading||before.gates.video.evidence?.resumeDialog||!before.gates.draftIdentity.ok)break;
+    if(entry.entry&&!enteredUpload){
+      try{await click('#vp2-douyin-upload-entry',{label:'open douyin video upload'});enteredUpload=true;}
+      catch(error){return {...before,blocker:typedBlocker('ACTION_FAILED',`douyin upload entry click failed: ${String(error?.message||error)}`,{retryable:true})};}
+    }
+    await wait(1);
+    before=await inspectDouyin();
+  }
   if(before.gates.video.ok)return {...before,actions:{upload:{mode:'already_ready'}}};
   if(!before.gates.draftIdentity.ok)return {...before,blocker:typedBlocker('FOREIGN_DRAFT','抖音当前编辑器属于其他视频草稿',{evidence:before.gates.draftIdentity.evidence})};
   if(before.gates.video.evidence?.uploading===true)return await waitExistingDouyinUpload();

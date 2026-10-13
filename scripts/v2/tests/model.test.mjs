@@ -64,3 +64,11 @@ test("READY rejects any attempted final-publish interaction even when it was blo
   assert.equal(verdict.ready, false);
   assert.deepEqual(verdict.missing, ["safety"]);
 });
+
+
+test("content-only drafts cannot become READY and need review instead of another upload", () => {
+  const verdict = evaluateObservation(observation("douyin", { gates: { publishReview: { ok: false, evidence: { stage: "content" } } } }));
+  assert.equal(verdict.ready, false);
+  assert.deepEqual(verdict.missing, ["publishReview"]);
+  assert.equal(classifyVerdict(verdict), "needs_review");
+});
