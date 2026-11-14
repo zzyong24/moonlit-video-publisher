@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "defaultAccount": "dahao",
+  "accounts": {
+    "dahao": {
+      "label": "大号",
+      "egoProfileId": "Default",
+      "platforms": {
+        "douyin": { "name": "Fixture Creator", "id": "fixture_creator_id" },
+        "xiaohongshu": { "name": "Fixture XHS Creator", "id": "fixture_xhs_id" },
+        "bilibili": { "name": "Fixture Bili Creator", "id": "100001" },
+        "wechat_channels": { "name": "Fixture Channels Creator", "id": "fixture_finder_id" }
+      }
+    },
+    "xiaohao": {
+      "label": "小号",
+      "egoProfileId": "Profile 1",
+      "platforms": {
+        "douyin": { "name": "Fixture Second", "id": "fixture_second_id" },
+        "xiaohongshu": { "name": "Fixture XHS Second", "id": "fixture_xhs_second_id" }
+      }
+    }
+  }
+}

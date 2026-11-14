@@ -60,6 +60,7 @@ test("Douyin topics come from the package instead of account-specific defaults",
     const packagePath = path.join(root, "package.json");
     await fs.promises.writeFile(packagePath, JSON.stringify({
       title: "Generic video",
+      expectedAccounts: { douyin: { name: "Fixture Creator", douyinId: "fixture_creator_id" } },
       douyinTopics: ["Automation", "Tutorial"],
       cover: { uploadCustomCover: false, useVideoFrame: true, approvalEvidence: "test fixture" },
     }));
@@ -238,5 +239,20 @@ test("Bilibili dual-slot correction binds and validates the independent 16:9 fil
     assert.equal(Object.hasOwn(pkg.cover,"platformAssets"),false);
     await fs.promises.writeFile(wide,pngHeader(1440,1080));
     assert.match(validateBilibiliPackage(pkg).join(";"),/ratio mismatch/);
+  });
+});
+
+test('Douyin expected account is retained exactly and required before preparation', async () => {
+  await withTempDir(async root => {
+    const packagePath = path.join(root, 'package.json');
+    const base = { title: 'Account gate fixture', douyinTopics: ['Fixture'], cover: { useVideoFrame: true, approvalEvidence: 'fixture' } };
+    fs.writeFileSync(packagePath, JSON.stringify(base));
+    let pkg = readPackage(packagePath, { config: defaultConfig() });
+    assert.ok(validateDouyinPackage(pkg).some(error => error.includes('expectedAccounts.douyin')));
+    const expectedAccounts = { douyin: { name: 'Fixture Creator', douyinId: 'fixture_creator_id' } };
+    fs.writeFileSync(packagePath, JSON.stringify({ ...base, expectedAccounts }));
+    pkg = readPackage(packagePath, { config: defaultConfig() });
+    assert.deepEqual(pkg.expectedAccounts, expectedAccounts);
+    assert.deepEqual(validateDouyinPackage(pkg), []);
   });
 });

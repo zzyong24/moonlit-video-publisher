@@ -1,19 +1,20 @@
 # Guarded Final Publish
 
-Use this phase only after the maintained runner returns `READY` for every selected platform and the user explicitly authorizes final publication in the current run. Authorization is one-shot, scoped to the confirmed package fingerprint and selected platforms, and must never be persisted.
+Use this phase for each platform only after the maintained runner returns `READY` for that platform and 月明 has reviewed the final preview and explicitly approved this specific platform item (see per-item-approval.md; run `node scripts/check-approval.mjs` first, consume it with `--link` after success, then report the link). Approval is one-shot, scoped to the confirmed package fingerprint and selected platforms, and must never be persisted.
 
 ## Preconditions
 
 1. Re-run the shared guoshen receipt gate at its default final stage for the actual package, video, selected covers and current platform before disarming any final control. Missing, stale, changed or incomplete review blocks submission; follow the activated moonlit-content-engine references/publish-review.md.
 2. Re-read the package from disk and verify its fingerprint matches the `READY` job.
 3. Confirm the exact selected platforms and recorded task-space ids/names.
-4. Freshly inspect each page: target identity matches, upload is complete, metadata/settings/covers pass, no dialog blocks the page, and exactly one enabled final control exists. For AI-generated content, independently read the actual native AI label on every selected platform; originality and a prose disclosure do not satisfy it. A runner READY whose adapter lacks that gate still requires this check and hash-bound final-review evidence before submission.
-5. Stop on any mismatch. Do not repair content during the final phase; return to the ordinary runner and regain `READY`.
+4. Freshly verify the destination account immediately before submission, independently of login and draft identity. For Douyin and Xiaohongshu run `node scripts/v2/verify-account.mjs <platform> <package.json> <task-space-id> --task-name <recorded name> --out <proof.json>` and pass the proof to `check-approval.mjs --account-proof`; it re-proves the bound Ego Profile and the exact name + stable ID, and is valid for 15 seconds only — click right after, otherwise re-run it. A persisted READY or prior screenshot is insufficient. Bilibili and WeChat Channels still require manual fresh name/stable-ID verification. Same-Profile task spaces share login state, so reverify after any authorized account switch. Do not navigate or refresh the uploader for this check. See [account-profiles.md](account-profiles.md).
+5. Freshly inspect each page: target identity matches, upload is complete, metadata/settings/covers pass, no dialog blocks the page, and exactly one enabled final control exists. For AI-generated content, independently read the actual native AI label on every selected platform; originality and a prose disclosure do not satisfy it. A runner READY whose adapter lacks that gate still requires this check and hash-bound final-review evidence before submission.
+6. Stop on any account or page mismatch. Do not repair content during the final phase; return to the ordinary runner and regain `READY`.
 
 ## Execution
 
 - Use `ego-browser` and the recorded task spaces. Never delegate creator-page control to sub Agents.
-- Process platforms serially. Before each click, report which exact platform is about to publish.
+- Process independently ready platforms serially within the current-run authorized scope. A login/upload failure on another platform does not block a platform whose own account, content, final review and page gates pass; preserve the failed platform for recovery and report it separately. This scheduling preference is not standing permission to publish future items. Before each click, report which exact platform is about to publish.
 - Keep each final-publish heredoc scoped to one platform. Select the recorded task space, then explicitly select its exact tab with `listTabs` / `switchTab`; do not rely on whichever tab was active in an earlier invocation. Re-observe after navigation or dialogs, and derive controls from the current DOM rather than reusing old refs.
 - On `USER_CONTROL`, stop the entire browser task. Report it as a browser ownership error, not proof of a user action. Resume only after explicit user confirmation. A submission timeout requires checking the content list for the exact target before any retry.
 - Disarm only the final-publish guard installed for that exact task space. Do not remove unrelated page listeners or disable browser security controls.

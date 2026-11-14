@@ -2,6 +2,18 @@
 
 Read `platform-common.md` and `ego-browser-workflow.md` first.
 
+## Required Target Account
+
+The package must provide `expectedAccounts.douyin = {"name":"目标创作者昵称","douyinId":"replace_with_target_douyin_id"}`. Both exact nonempty strings are required before the browser starts; no default account and no inference from Profile/task-space names is allowed. Establish the intended destination from the user/work record, then compare the actual account before packaging; never change the expected fields to match an unintended logged-in account.
+
+`authenticated` only means a session exists. The independent `targetAccount` gate requires the actual name and stable Douyin ID from the same visible creator-home identity header: one `header-` class-prefix container with one scoped `name-` and one `unique_id-` element (`抖音号：ID`). Do not match text from a biography, video description or unrelated container. Selector drift, duplicates, a mismatch or absent evidence fail closed as `ACCOUNT_UNVERIFIED` / `ACCOUNT_MISMATCH`.
+
+The implementation uses documented Ego TaskSpace/Page APIs for a dedicated same-space read-only `https://creator.douyin.com/creator-micro/home` Page, reloading that Page for each check and restoring the exact upload tab. Never reload/navigate the ongoing upload. Check before and after each phase, before every initial/retry video injection, during metadata/recovery, and immediately before final submission. The central READY model rejects proofs older than 15 seconds; a saved successful proof is not future authority. Keep the final guard armed until fresh account and all other final checks pass.
+
+Spaces in one Ego Profile share login state. A fresh space does not select a different account. Do not silently change Profile or account; after an authorized switch, stop affected controllers and reverify every destination. The source implementation has fixture tests, not automatic live acceptance; record real creator-page acceptance separately.
+
+Legacy packages without expected identity fail before browser work. Follow [versioned migration](intake-workflow.md#destination-account-and-versioned-package): preserve the old package/job/receipt, create a corrected package, review it and plan same-page recovery if a matching correct-account upload exists. Never rewrite a fingerprint or repeat upload to bypass the new gate.
+
 ## Package Topics
 
 Use the 1-5 topic entities supplied by `douyinTopics`, in order. Do not inject account campaigns or personal recurring tags that are absent from the package.
@@ -71,6 +83,7 @@ For confirmed generated images or video, use the current editor’s native `自�
 
 ```text
 authenticated
+exact targetAccount name + stable douyinId with fresh same-space evidence
 correct draft identity
 video fully uploaded
 exact title and body

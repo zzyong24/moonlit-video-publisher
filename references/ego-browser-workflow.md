@@ -32,6 +32,14 @@ Because the input channel is process-wide, one such blocker circuit-breaks all r
 
 This boundary is real-tested during both parallel upload and serialized mutation. In the mutation test, Ego was terminated one second after the Douyin mutator process appeared; the two later platform mutators never started.
 
+## Same Profile Means Shared Account Session
+
+Task-space names/ids separate pages, not website accounts. Spaces attached to the same Ego Profile share its login session. Before a package is finalized, compare the actual creator-home name/stable ID with the user's intended destination; never derive the target merely from the current login. Do not silently switch Profile to repair a mismatch. An authorized login/account switch requires affected controllers to stop and destinations to be freshly reverified.
+
+Douyin's and Xiaohongshu's implementations check a dedicated read-only home Page in the same task space and restore the editor afterward; only that home Page may be reloaded. Do not navigate/refresh a native upload. Cached identity evidence expires after 15 seconds. Bilibili and WeChat Channels have no automatic target-account gate; check their identities manually before preparation and final submission.
+
+Every task space is pinned to the bound account's Ego Profile ([account-profiles.md](account-profiles.md)): reuse only after `listTaskSpaces()` shows the same `profileId` (otherwise `PROFILE_MISMATCH`), create only with `taskSpace(name, { profileId })`, and never rely on the active/last-used Profile. Never use `ego-browser import` to populate a publishing Profile from another browser.
+
 ## Platform URLs
 
 ```text

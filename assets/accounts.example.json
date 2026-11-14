@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "defaultAccount": "dahao",
+  "accounts": {
+    "dahao": {
+      "label": "大号",
+      "egoProfileId": "Default",
+      "platforms": {
+        "douyin": { "name": "替换为大号抖音昵称", "id": "replace_with_dahao_douyin_id" },
+        "xiaohongshu": { "name": "替换为大号小红书昵称", "id": "replace_with_dahao_xhs_id" },
+        "bilibili": { "name": "替换为大号B站昵称", "id": "replace_with_dahao_bilibili_uid" },
+        "wechat_channels": { "name": "替换为大号视频号名称", "id": "replace_with_dahao_finder_id" }
+      }
+    },
+    "xiaohao": {
+      "label": "小号",
+      "egoProfileId": "replace_with_xiaohao_profile_id",
+      "platforms": {
+        "douyin": { "name": "替换为小号抖音昵称", "id": "replace_with_xiaohao_douyin_id" },
+        "xiaohongshu": { "name": "替换为小号小红书昵称", "id": "replace_with_xiaohao_xhs_id" }
+      }
+    }
+  }
+}

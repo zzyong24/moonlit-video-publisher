@@ -1,0 +1,20 @@
+[
+ {
+  "skill": "moonlit-video-publisher",
+  "query": "这个视频审核通过了，发到抖音和B站",
+  "should_trigger": true,
+  "expected": "准备到 READY，逐平台给月明看预览，逐条批准后发布并回报链接"
+ },
+ {
+  "skill": "moonlit-video-publisher",
+  "query": "把成片上传到小红书和视频号，填好标题标签",
+  "should_trigger": true,
+  "expected": "上传填表到 READY，等逐条批准"
+ },
+ {
+  "skill": "moonlit-video-publisher",
+  "query": "发一篇小红书图文笔记",
+  "should_trigger": false,
+  "expected": "路由到 moonlit-social-publisher"
+ }
+]

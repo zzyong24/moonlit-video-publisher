@@ -219,3 +219,100 @@ export function writeConfig(config, configPath = resolveConfigPath()) {
   fs.chmodSync(absolutePath, 0o600);
   return absolutePath;
 }
+
+// ---------------------------------------------------------------------------
+// Publishing accounts: 账号 → Ego Lite Profile → 平台 → 预期昵称/账号ID
+// (月明 2026-10-21). Separate per-user file next to config.json; it only holds
+// identity expectations and Profile ids, never cookies, tokens or login state.
+// Fail closed: a missing file, account, Profile id or platform entry is an error.
+// ---------------------------------------------------------------------------
+export const ACCOUNTS_SCHEMA_VERSION = 1;
+export const DEFAULT_ACCOUNT = "dahao";
+export const ACCOUNT_KEYS = ["dahao", "xiaohao"];
+export const ACCOUNT_LABELS = { dahao: "大号", xiaohao: "小号" };
+// 小号 may only publish to these platforms; any other platform is a hard error.
+export const XIAOHAO_PLATFORMS = ["douyin", "xiaohongshu"];
+const ACCOUNT_ALIASES = { dahao: "dahao", "大号": "dahao", main: "dahao", xiaohao: "xiaohao", "小号": "xiaohao", secondary: "xiaohao" };
+
+export class AccountConfigError extends Error {
+  constructor(code, message, evidence = null) {
+    super(message);
+    this.code = code;
+    this.evidence = evidence;
+  }
+}
+
+export function resolveAccountsPath(configPath = resolveConfigPath()) {
+  if (process.env.VIDEO_PUBLISHER_ACCOUNTS) return path.resolve(process.env.VIDEO_PUBLISHER_ACCOUNTS);
+  return path.join(path.dirname(configPath), "accounts.json");
+}
+
+export function normalizeAccountKey(value) {
+  if (value === undefined || value === null || String(value).trim() === "") return DEFAULT_ACCOUNT;
+  const key = ACCOUNT_ALIASES[String(value).trim().toLowerCase()] || ACCOUNT_ALIASES[String(value).trim()];
+  if (!key) throw new AccountConfigError("ACCOUNT_UNKNOWN", `未知发布账号 "${value}"；只能是 大号(dahao) 或 小号(xiaohao)`);
+  return key;
+}
+
+export function validateAccountsConfig(raw) {
+  const errors = [];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return ["accounts config must be a JSON object"];
+  if (Number(raw.schemaVersion) !== ACCOUNTS_SCHEMA_VERSION) errors.push(`accounts schemaVersion must be ${ACCOUNTS_SCHEMA_VERSION}`);
+  if (raw.defaultAccount !== undefined && raw.defaultAccount !== DEFAULT_ACCOUNT) errors.push(`defaultAccount must be "${DEFAULT_ACCOUNT}" (大号); 小号 is used only when explicitly requested`);
+  const accounts = raw.accounts;
+  if (!accounts || typeof accounts !== "object" || Array.isArray(accounts)) return [...errors, "accounts must be an object keyed by dahao/xiaohao"];
+  for (const key of Object.keys(accounts)) {
+    if (!ACCOUNT_KEYS.includes(key)) { errors.push(`unknown account key "${key}"; use dahao or xiaohao`); continue; }
+    const account = accounts[key];
+    if (!account || typeof account !== "object") { errors.push(`accounts.${key} must be an object`); continue; }
+    if (typeof account.egoProfileId !== "string" || !account.egoProfileId.trim()) errors.push(`accounts.${key}.egoProfileId is required (Ego Lite Profile id such as "Default" or "Profile 1", not the display name)`);
+    const platforms = account.platforms;
+    if (!platforms || typeof platforms !== "object" || Array.isArray(platforms)) { errors.push(`accounts.${key}.platforms must be an object`); continue; }
+    for (const [platform, identity] of Object.entries(platforms)) {
+      if (!CONFIG_PLATFORMS.includes(platform)) { errors.push(`accounts.${key}.platforms.${platform} is not a supported platform`); continue; }
+      if (key === "xiaohao" && !XIAOHAO_PLATFORMS.includes(platform)) errors.push(`accounts.xiaohao.platforms.${platform} is not allowed; 小号 only publishes to ${XIAOHAO_PLATFORMS.join("/")}`);
+      for (const field of ["name", "id"]) {
+        if (typeof identity?.[field] !== "string" || !identity[field].trim()) errors.push(`accounts.${key}.platforms.${platform}.${field} is required as a nonempty string`);
+      }
+    }
+  }
+  if (accounts.dahao && accounts.xiaohao && String(accounts.dahao.egoProfileId).trim() === String(accounts.xiaohao.egoProfileId).trim()) {
+    errors.push("dahao and xiaohao must use different Ego Lite Profiles (same Profile = shared login)");
+  }
+  return errors;
+}
+
+export function loadAccounts({ accountsPath, configPath = resolveConfigPath() } = {}) {
+  const file = accountsPath || resolveAccountsPath(configPath);
+  if (!fs.existsSync(file)) throw new AccountConfigError("ACCOUNT_MAPPING_MISSING", `发布账号映射文件不存在：${file}（见 assets/accounts.example.json）`);
+  let raw;
+  try { raw = JSON.parse(fs.readFileSync(file, "utf8")); }
+  catch (error) { throw new AccountConfigError("ACCOUNT_MAPPING_INVALID", `发布账号映射文件无法解析：${file}: ${error.message}`); }
+  const errors = validateAccountsConfig(raw);
+  if (errors.length) throw new AccountConfigError("ACCOUNT_MAPPING_INVALID", `发布账号映射无效：${errors.join("; ")}`);
+  return { path: file, ...raw };
+}
+
+// Resolve the one destination for (account, platform). Throws AccountConfigError.
+export function resolvePublishAccount(accounts, requestedAccount, platform) {
+  const account = normalizeAccountKey(requestedAccount);
+  if (!CONFIG_PLATFORMS.includes(platform)) throw new AccountConfigError("ACCOUNT_PLATFORM_UNSUPPORTED", `不支持的平台 ${platform}`);
+  if (account === "xiaohao" && !XIAOHAO_PLATFORMS.includes(platform)) {
+    throw new AccountConfigError("ACCOUNT_PLATFORM_UNSUPPORTED", `小号目前只能发 抖音/小红书，不能发 ${platform}；已停止`, { account, platform });
+  }
+  const entry = accounts?.accounts?.[account];
+  if (!entry) throw new AccountConfigError("ACCOUNT_MAPPING_MISSING", `账号映射里没有 ${ACCOUNT_LABELS[account]}(${account})`, { account, platform });
+  const egoProfileId = String(entry.egoProfileId || "").trim();
+  if (!egoProfileId) throw new AccountConfigError("ACCOUNT_MAPPING_MISSING", `${ACCOUNT_LABELS[account]} 没有配置 egoProfileId`, { account, platform });
+  const identity = entry.platforms?.[platform];
+  if (!identity || !String(identity.name || "").trim() || !String(identity.id || "").trim()) {
+    throw new AccountConfigError("ACCOUNT_MAPPING_MISSING", `${ACCOUNT_LABELS[account]} 在 ${platform} 上没有预期昵称/账号ID 映射`, { account, platform });
+  }
+  return {
+    account,
+    label: ACCOUNT_LABELS[account],
+    egoProfileId,
+    platform,
+    expected: { name: String(identity.name).trim(), id: String(identity.id).trim() },
+  };
+}

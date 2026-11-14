@@ -8,7 +8,7 @@ One orchestrator owns all platform task spaces. Do not use sub Agents for live c
 
 Before reading or writing job state or starting a platform phase, acquire the state-root `.publisher/orchestrator.lock` and then the job-directory `orchestrator.lock`. The state-root lock allows only one video job to control the shared creator accounts; the job lock additionally protects one persisted job. A second process must fail immediately instead of splitting platform locks with the owner. Remove both locks on every normal exit; after a crash, remove a lock only when its recorded PID is no longer alive. A fresh lock whose owner file is still being written remains busy.
 
-Never click a final `发布`, `发布笔记`, `发表`, or `立即投稿` button without explicit authorization in the current run. Every adapter result must leave `finalPublishClicked: false`. The shared core installs a capture-phase click/submit guard; safety passes only when `guardArmed: true` and `blockedAttempts: 0` are observed from the live page.
+Never click a final `发布`, `发布笔记`, `发表`, or `立即投稿` button without 月明's explicit approval of this specific platform item after seeing its final preview (per-item-approval.md; `check-approval.mjs` must pass). Every adapter result must leave `finalPublishClicked: false`. The shared core installs a capture-phase click/submit guard; safety passes only when `guardArmed: true` and `blockedAttempts: 0` are observed from the live page.
 
 If Ego reports that the user controls a task space, stop the whole browser job. Do not retry, create a replacement task space, or claim it without explicit user confirmation.
 
@@ -25,7 +25,7 @@ Use `scripts/run-safe-platforms.sh`, which invokes `scripts/v2/publisher.mjs`.
 6. verify platforms independently in parallel
 ```
 
-Do not pipeline UI mutations behind unfinished uploads. Live testing showed that overlapping upload processes and UI control can freeze the shared Ego input channel even across isolated task spaces.
+Do not overlap live Ego upload/wait runners with another UI controller: live testing reproduced shared-input freezes even across isolated task spaces. After every prior CLI/Ego runner exits, the exclusive same-job `--metadata-only` recovery entry may fill enabled plain fields while the browser native upload continues; see [the Playbook](automatic-publishing-playbook.md#prepare-metadata-while-native-upload-continues). Full mutation and final submission still require completed upload.
 
 The browser channel is shared across task spaces. If any runner reports `INPUT_CHANNEL_BROKEN`, treat it as a phase-wide circuit breaker: wait for all already-started parallel runners, skip every remaining quarantine/upload/mutate action, and run only final read-only verification. An ordinary same-job retry after Ego restarts is the recovery path.
 
@@ -107,6 +107,7 @@ Shared gates:
 
 ```text
 authenticated
+targetAccount (Douyin only: exact expected name + stable ID, fresh same-space evidence; other platforms require manual identity checks)
 draftIdentity
 video
 platform metadata and tag/entity gates
@@ -149,6 +150,8 @@ Use stable blocker codes from `scripts/v2/lib/model.mjs`, including:
 
 ```text
 AUTH_REQUIRED
+ACCOUNT_UNVERIFIED
+ACCOUNT_MISMATCH
 USER_CONTROL
 FOREIGN_DRAFT
 UPLOAD_NOT_STARTED

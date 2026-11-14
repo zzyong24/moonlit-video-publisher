@@ -6,6 +6,10 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+// Fixture account mapping (账号→Ego Profile→平台→昵称/ID); production reads ~/.config/video-publisher/accounts.json.
+process.env.VIDEO_PUBLISHER_ACCOUNTS = fileURLToPath(new URL('../../tests/fixtures/accounts.fixture.json', import.meta.url));
+
+
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const V2_DIR = path.dirname(DIR);
 
@@ -17,7 +21,7 @@ for (const phase of ["upload", "mutate"]) {
     const configPath = path.join(root, "config.json");
     const log = path.join(root, "events.ndjson");
     fs.writeFileSync(videoPath, "fixture");
-    fs.writeFileSync(packagePath, JSON.stringify({ videoPath, title: "Control test", xhsTopics: ["Test"], douyinTopics: ["Test"], cover: { uploadCustomCover: false, useVideoFrame: true, approvalEvidence: "test fixture" } }));
+    fs.writeFileSync(packagePath, JSON.stringify({ videoPath, title: "Control test", xhsTopics: ["Test"], expectedAccounts: { douyin: { name: "Fixture Creator", douyinId: "fixture_creator_id" } }, douyinTopics: ["Test"], cover: { uploadCustomCover: false, useVideoFrame: true, approvalEvidence: "test fixture" } }));
     fs.writeFileSync(configPath, JSON.stringify({ schemaVersion: 1, onboarding: { completed: true }, sourceDirectory: root, defaultPlatforms: ["xiaohongshu", "douyin"], declarations: { originalityPolicy: "all_videos_original" } }));
     const result = await run(process.execPath, [path.join(V2_DIR, "publisher.mjs"), packagePath, "control-test", "xiaohongshu", "douyin", "--state-root", root, "--upload-concurrency", "1"], { env: { ...process.env, VIDEO_PUBLISHER_CONFIG: configPath, VIDEO_PUBLISHER_V2_RUNNER: path.join(DIR, "mock-runner.mjs"), VIDEO_PUBLISHER_V2_MOCK_LOG: log, VIDEO_PUBLISHER_V2_MOCK_USER_CONTROL: `xiaohongshu:${phase}` } });
     assert.equal(result.code, 10, result.stderr);
@@ -69,7 +73,7 @@ test("publisher waits for every upload process before serial UI mutation", async
   await fs.promises.writeFile(packagePath,JSON.stringify({
     videoPath,
     title:"Automation test",
-    douyinTopics:["Automation","Tutorial"],
+    expectedAccounts: { douyin: { name: "Fixture Creator", douyinId: "fixture_creator_id" } }, douyinTopics:["Automation","Tutorial"],
     bilibiliDescription:"Generic orchestration test.",
     bilibiliTags:["Automation","Tutorial"],
     xhsTopics:["Automation","Tutorial"],
@@ -97,7 +101,7 @@ test("publisher circuit-breaks all UI mutation after an upload loses Ego", async
   const configPath=path.join(root,"config.json");
   await fs.promises.writeFile(videoPath,"test video fixture");
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["xiaohongshu","douyin"],declarations:{originalityPolicy:"all_videos_original"},execution:{checkConcurrency:2,uploadConcurrency:2}}));
-  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Circuit breaker",xhsTopics:["Test"],douyinTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
+  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Circuit breaker",xhsTopics:["Test"],expectedAccounts: { douyin: { name: "Fixture Creator", douyinId: "fixture_creator_id" } }, douyinTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   const result=await run(process.execPath,[path.join(V2_DIR,"publisher.mjs"),packagePath,"channel-break","xiaohongshu","douyin","--state-root",root],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,"mock-runner.mjs"),VIDEO_PUBLISHER_V2_MOCK_LOG:log,VIDEO_PUBLISHER_V2_MOCK_BROKEN_CHANNEL:"douyin:upload"}});
   assert.equal(result.code,0,`${result.stderr}\n${result.stdout}`);
   assert.match(result.stderr,/UI serial: none \(input channel broken\)/);
@@ -114,7 +118,7 @@ test("publisher stops the serial UI queue when a mutator loses Ego", async () =>
   const configPath=path.join(root,"config.json");
   await fs.promises.writeFile(videoPath,"test video fixture");
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["xiaohongshu","douyin","bilibili","wechat_channels"],declarations:{originalityPolicy:"all_videos_original"},execution:{checkConcurrency:4,uploadConcurrency:4}}));
-  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Mutation break",xhsTopics:["Test"],douyinTopics:["Test"],bilibiliDescription:"Mutation circuit breaker",bilibiliTags:["Test"],wechatDescription:"Mutation circuit breaker\n\n#Test",wechatTags:["Test"],contentTypeDeclaration:"无需标注",cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
+  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Mutation break",xhsTopics:["Test"],expectedAccounts: { douyin: { name: "Fixture Creator", douyinId: "fixture_creator_id" } }, douyinTopics:["Test"],bilibiliDescription:"Mutation circuit breaker",bilibiliTags:["Test"],wechatDescription:"Mutation circuit breaker\n\n#Test",wechatTags:["Test"],contentTypeDeclaration:"无需标注",cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   const result=await run(process.execPath,[path.join(V2_DIR,"publisher.mjs"),packagePath,"mutation-break","xiaohongshu","douyin","bilibili","wechat_channels","--state-root",root],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,"mock-runner.mjs"),VIDEO_PUBLISHER_V2_MOCK_LOG:log,VIDEO_PUBLISHER_V2_MOCK_BROKEN_CHANNEL:"douyin:mutate"}});
   assert.equal(result.code,0,`${result.stderr}\n${result.stdout}`);
   const events=(await fs.promises.readFile(log,"utf8")).trim().split(/\n/).map(line=>JSON.parse(line));
@@ -151,7 +155,7 @@ test("publisher allows an available non-default platform when explicitly selecte
   const configPath=path.join(root,"config.json");
   const log=path.join(root,"events.ndjson");
   await fs.promises.writeFile(videoPath,"test video fixture");
-  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Availability override",douyinTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
+  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Availability override",expectedAccounts: { douyin: { name: "Fixture Creator", douyinId: "fixture_creator_id" } }, douyinTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:2,onboarding:{completed:true},sourceDirectory:root,availablePlatforms:["xiaohongshu","douyin"],defaultPlatforms:["xiaohongshu"],declarations:{originalityPolicy:"all_videos_original"},execution:{checkConcurrency:2,uploadConcurrency:2}}));
   const result=await run(process.execPath,[path.join(V2_DIR,"publisher.mjs"),packagePath,"availability-override","douyin","--state-root",root],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,"mock-runner.mjs"),VIDEO_PUBLISHER_V2_MOCK_LOG:log}});
   assert.equal(result.code,0,`${result.stderr}\n${result.stdout}`);
@@ -198,7 +202,7 @@ test("publisher blocks an over-15-minute Douyin video before browser work", asyn
   const log=path.join(root,"events.ndjson");
   await fs.promises.writeFile(videoPath,mp4WithDuration(901));
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["douyin"],declarations:{originalityPolicy:"all_videos_original"},execution:{checkConcurrency:1,uploadConcurrency:1}}));
-  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Duration test",douyinTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
+  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Duration test",expectedAccounts: { douyin: { name: "Fixture Creator", douyinId: "fixture_creator_id" } }, douyinTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   const result=await run(process.execPath,[path.join(V2_DIR,"publisher.mjs"),packagePath,"duration-test","douyin","--state-root",root],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,"mock-runner.mjs"),VIDEO_PUBLISHER_V2_MOCK_LOG:log}});
   assert.equal(result.code,1);
   assert.match(result.stderr,/DOUYIN_DURATION_LIMIT/);
@@ -213,7 +217,7 @@ test("publisher isolates a Douyin duration blocker and still prepares eligible p
   const log=path.join(root,"events.ndjson");
   await fs.promises.writeFile(videoPath,mp4WithDuration(901));
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["xiaohongshu","douyin"],declarations:{originalityPolicy:"all_videos_original"},execution:{checkConcurrency:2,uploadConcurrency:2}}));
-  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Partial preflight",xhsTopics:["Test"],douyinTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
+  await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Partial preflight",xhsTopics:["Test"],expectedAccounts: { douyin: { name: "Fixture Creator", douyinId: "fixture_creator_id" } }, douyinTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   const result=await run(process.execPath,[path.join(V2_DIR,"publisher.mjs"),packagePath,"partial-preflight","xiaohongshu","douyin","--state-root",root],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,"mock-runner.mjs"),VIDEO_PUBLISHER_V2_MOCK_LOG:log}});
   assert.equal(result.code,10,`${result.stderr}\n${result.stdout}`);
   const summary=JSON.parse(result.stdout);
@@ -344,7 +348,7 @@ test('a fingerprint-bound recovery checkpoint overrides stale persisted cover re
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-fresh-checkpoint-'));
   const videoPath = path.join(root, 'video.mp4'), packagePath = path.join(root, 'package.json'), configPath = path.join(root, 'config.json');
   fs.writeFileSync(videoPath, 'fixture');
-  fs.writeFileSync(packagePath, JSON.stringify({videoPath, title:'Checkpoint recovery', douyinTopics:['Test'], cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:'fixture'}}));
+  fs.writeFileSync(packagePath, JSON.stringify({videoPath, title:'Checkpoint recovery', expectedAccounts: { douyin: { name: "Fixture Creator", douyinId: "fixture_creator_id" } }, douyinTopics:['Test'], cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:'fixture'}}));
   fs.writeFileSync(configPath, JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:['douyin'],declarations:{originalityPolicy:'all_videos_original'}}));
   const args=[path.join(V2_DIR,'publisher.mjs'),packagePath,'checkpoint','douyin','--state-root',root,'--job-id','checkpoint'];
   const env={...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_RUNNER:path.join(DIR,'mock-runner.mjs')};
@@ -356,4 +360,127 @@ test('a fingerprint-bound recovery checkpoint overrides stale persisted cover re
   await run(process.execPath,[...args,'--inspect-only'],{env});
   const restored=JSON.parse(fs.readFileSync(stateFile,'utf8'));
   assert.deepEqual(restored.platforms.douyin.receipts,corrected);
+});
+
+test('metadata-only same-job recovery never uploads, mutates covers, or claims READY', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'metadata same job '));
+  try {
+    const packagePath = path.join(root, 'package.json'), configPath = path.join(root, 'config.json');
+    const videoPath = path.join(root, 'sample.mp4'), log = path.join(root, 'events.ndjson');
+    fs.writeFileSync(videoPath, 'fixture');
+    fs.writeFileSync(packagePath, JSON.stringify({ videoPath, title: 'Metadata test', bilibiliDescription: 'Fixture description', contentTypeDeclaration: '无需标注', bilibiliTags: ['Test'], cover: { useVideoFrame: true, approvalEvidence: 'fixture' } }));
+    fs.writeFileSync(configPath, JSON.stringify({ schemaVersion: 1, onboarding: { completed: true }, sourceDirectory: root, defaultPlatforms: ['bilibili'], declarations: { originalityPolicy: 'all_videos_original' } }));
+    const env = { ...process.env, VIDEO_PUBLISHER_CONFIG: configPath, VIDEO_PUBLISHER_V2_RUNNER: path.join(DIR, 'mock-runner.mjs'), VIDEO_PUBLISHER_V2_MOCK_LOG: log, VIDEO_PUBLISHER_V2_PLATFORM_LOCK_ROOT: path.join(root, 'platform-locks') };
+    const base = [path.join(V2_DIR, 'publisher.mjs'), packagePath, 'same-job', 'bilibili', '--state-root', root, '--job-id', 'existing'];
+    let result = await run(process.execPath, [...base, '--metadata-only'], { env });
+    assert.equal(result.code, 2, result.stderr);
+    assert.equal(fs.existsSync(log), false, 'missing job must fail before browser');
+    result = await run(process.execPath, [...base, '--inspect-only'], { env });
+    assert.equal(result.code, 0, result.stderr);
+    fs.writeFileSync(log, '');
+    result = await run(process.execPath, [...base, '--metadata-only'], { env });
+    assert.equal(result.code, 0, result.stderr);
+    const summary = JSON.parse(result.stdout);
+    assert.equal(summary.ready, false);
+    assert.equal(summary.status, 'metadata_prepared');
+    assert.equal(summary.metadata.ok, true);
+    const events = fs.readFileSync(log, 'utf8').trim().split('\n').map(JSON.parse);
+    assert.deepEqual(events.filter(e => e.event === 'start').map(e => e.phase), ['inspect', 'metadata']);
+    assert.equal(fs.existsSync(path.join(root, '.publisher', 'orchestrator.lock')), false);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('metadata-only persists no READY verdict even when all real gates already pass', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'metadata already complete '));
+  try {
+    const packagePath = path.join(root, 'package.json'), configPath = path.join(root, 'config.json'), videoPath = path.join(root, 'sample.mp4');
+    fs.writeFileSync(videoPath, 'fixture');
+    fs.writeFileSync(packagePath, JSON.stringify({ videoPath, title: 'Metadata complete', bilibiliDescription: 'Fixture description', contentTypeDeclaration: '无需标注', bilibiliTags: ['Test'], cover: { useVideoFrame: true, approvalEvidence: 'fixture' } }));
+    fs.writeFileSync(configPath, JSON.stringify({ schemaVersion: 1, onboarding: { completed: true }, sourceDirectory: root, defaultPlatforms: ['bilibili'], declarations: { originalityPolicy: 'all_videos_original' } }));
+    const env = { ...process.env, VIDEO_PUBLISHER_CONFIG: configPath, VIDEO_PUBLISHER_V2_RUNNER: path.join(DIR, 'mock-runner.mjs'), VIDEO_PUBLISHER_V2_PLATFORM_LOCK_ROOT: path.join(root, 'platform-locks'), VIDEO_PUBLISHER_V2_MOCK_ALL_GATES: '1' };
+    const base = [path.join(V2_DIR, 'publisher.mjs'), packagePath, 'same-job', 'bilibili', '--state-root', root, '--job-id', 'existing'];
+    let result = await run(process.execPath, [...base, '--inspect-only'], { env });
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).platforms.bilibili.ready, true, 'ordinary inspect semantics remain unchanged');
+    const evidenceDir = path.join(root, 'existing', 'evidence');
+    const previous = new Set(fs.readdirSync(evidenceDir));
+    result = await run(process.execPath, [...base, '--metadata-only'], { env });
+    assert.equal(result.code, 0, result.stderr);
+    const summary = JSON.parse(result.stdout), state = JSON.parse(fs.readFileSync(path.join(root, 'existing', 'state.json')));
+    assert.equal(summary.ready, false); assert.equal(summary.platforms.bilibili.ready, false);
+    assert.notEqual(state.status, 'ready'); assert.notEqual(state.platforms.bilibili.status, 'ready');
+    assert.equal(state.platforms.bilibili.verdict.ready, false);
+    assert.equal(state.platforms.bilibili.verdict.requiresFullVerification, true);
+    for (const file of fs.readdirSync(evidenceDir).filter(file => !previous.has(file))) {
+      const recorded = JSON.parse(fs.readFileSync(path.join(evidenceDir, file)));
+      assert.equal(recorded.verdict.ready, false, file);
+      assert.equal(recorded.verdict.preparationOnly, true, file);
+      assert.equal(recorded.observation.preparationMode, 'metadata_only', file);
+      assert.equal(Object.values(recorded.observation.gates).every(gate => gate.ok === true), true, 'do not falsify actual page gates');
+    }
+    result = await run(process.execPath, [...base, '--inspect-only'], { env });
+    assert.equal(JSON.parse(result.stdout).platforms.bilibili.ready, true, 'normal verification is unaffected after bounded preparation');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+async function accountPreflight({ pkgExtra = {}, platforms = ['douyin'], accountsPath } = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'publish account preflight '));
+  try {
+    const videoPath = path.join(root, 'video.mp4'), packagePath = path.join(root, 'package.json'), configPath = path.join(root, 'config.json'), log = path.join(root, 'runner.log');
+    fs.writeFileSync(videoPath, 'fixture');
+    fs.writeFileSync(packagePath, JSON.stringify({ videoPath, title: 'Account preflight', douyinTopics: ['Test'], xhsTopics: ['Test'], bilibiliDescription: 'x', bilibiliTags: ['Test'], cover: { useVideoFrame: true, approvalEvidence: 'fixture' }, ...pkgExtra }));
+    fs.writeFileSync(configPath, JSON.stringify({ schemaVersion: 1, onboarding: { completed: true }, sourceDirectory: root, defaultPlatforms: platforms, availablePlatforms: ['xiaohongshu', 'douyin', 'bilibili', 'wechat_channels'], declarations: { originalityPolicy: 'all_videos_original' } }));
+    const env = { ...process.env, VIDEO_PUBLISHER_CONFIG: configPath, VIDEO_PUBLISHER_V2_RUNNER: path.join(DIR, 'mock-runner.mjs'), VIDEO_PUBLISHER_V2_MOCK_LOG: log, ...(accountsPath !== undefined ? { VIDEO_PUBLISHER_ACCOUNTS: accountsPath || path.join(root, 'missing-accounts.json') } : {}) };
+    const result = await run(process.execPath, [path.join(V2_DIR, 'publisher.mjs'), packagePath, 'fixture', ...platforms, '--state-root', root, '--job-id', 'must-not-exist'], { env });
+    return { result, ranBrowser: fs.existsSync(log), jobCreated: fs.existsSync(path.join(root, 'must-not-exist')) };
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+}
+
+test('missing account mapping fails closed before any browser runner or job state', async () => {
+  const { result, ranBrowser, jobCreated } = await accountPreflight({ accountsPath: '' });
+  assert.equal(result.code, 1); assert.match(result.stderr, /ACCOUNT_MAPPING_MISSING/);
+  assert.equal(ranBrowser, false); assert.equal(jobCreated, false);
+});
+
+test('小号 on a platform other than Douyin/Xiaohongshu is a hard error before browser work', async () => {
+  const { result, ranBrowser } = await accountPreflight({ pkgExtra: { account: '小号' }, platforms: ['bilibili'] });
+  assert.equal(result.code, 1); assert.match(result.stderr, /ACCOUNT_PLATFORM_UNSUPPORTED/); assert.match(result.stderr, /小号目前只能发/);
+  assert.equal(ranBrowser, false);
+});
+
+test('a hand-written expectedAccounts entry that disagrees with the mapping is refused', async () => {
+  const { result, ranBrowser } = await accountPreflight({ pkgExtra: { expectedAccounts: { douyin: { name: 'Fixture Creator', douyinId: 'someone_else' } } } });
+  assert.equal(result.code, 1); assert.match(result.stderr, /ACCOUNT_MAPPING_CONFLICT/); assert.equal(ranBrowser, false);
+});
+
+test('without an explicit account the package goes to 大号; 小号 binds its own Profile and identity', async () => {
+  const dahao = await accountPreflight({ platforms: ['douyin', 'xiaohongshu'] });
+  assert.equal(dahao.result.code, 0, dahao.result.stderr);
+  const summary = JSON.parse(dahao.result.stdout.slice(dahao.result.stdout.lastIndexOf('\n{') + 1));
+  for (const platform of ['douyin', 'xiaohongshu']) {
+    const destination = summary.platforms[platform].destination;
+    assert.equal(destination.account, 'dahao'); assert.equal(destination.egoProfileId, 'Default'); assert.equal(destination.verified, true);
+    assert.match(destination.screenshotPath, /mock-account/);
+  }
+  assert.equal(summary.platforms.douyin.destination.actual.douyinId, 'fixture_creator_id');
+  assert.equal(summary.platforms.xiaohongshu.destination.actual.xhsId, 'fixture_xhs_id');
+  const xiaohao = await accountPreflight({ pkgExtra: { account: 'xiaohao' }, platforms: ['douyin'] });
+  assert.equal(xiaohao.result.code, 0, xiaohao.result.stderr);
+  const second = JSON.parse(xiaohao.result.stdout.slice(xiaohao.result.stdout.lastIndexOf('\n{') + 1)).platforms.douyin.destination;
+  assert.equal(second.account, 'xiaohao'); assert.equal(second.egoProfileId, 'Profile 1'); assert.equal(second.actual.douyinId, 'fixture_second_id');
+});
+
+test('a task space observed in the wrong Profile never reaches READY', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'publish wrong profile '));
+  try {
+    const videoPath = path.join(root, 'video.mp4'), packagePath = path.join(root, 'package.json'), configPath = path.join(root, 'config.json');
+    fs.writeFileSync(videoPath, 'fixture');
+    fs.writeFileSync(packagePath, JSON.stringify({ videoPath, title: 'Wrong profile', account: 'xiaohao', douyinTopics: ['Test'], cover: { useVideoFrame: true, approvalEvidence: 'fixture' } }));
+    fs.writeFileSync(configPath, JSON.stringify({ schemaVersion: 1, onboarding: { completed: true }, sourceDirectory: root, defaultPlatforms: ['douyin'], declarations: { originalityPolicy: 'all_videos_original' } }));
+    const result = await run(process.execPath, [path.join(V2_DIR, 'publisher.mjs'), packagePath, 'fixture', 'douyin', '--state-root', root], { env: { ...process.env, VIDEO_PUBLISHER_CONFIG: configPath, VIDEO_PUBLISHER_V2_RUNNER: path.join(DIR, 'mock-runner.mjs'), VIDEO_PUBLISHER_V2_MOCK_PROFILE_ID: 'Default' } });
+    const summary = JSON.parse(result.stdout.slice(result.stdout.lastIndexOf('\n{') + 1));
+    assert.equal(summary.ready, false);
+    assert.equal(summary.platforms.douyin.blocker.code, 'PROFILE_MISMATCH');
+    assert.equal(summary.platforms.douyin.status, 'blocked_user');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

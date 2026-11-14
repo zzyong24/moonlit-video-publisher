@@ -15,6 +15,7 @@ const FINAL_TEXT = /^(发布|发布笔记|发表|立即投稿)$/;
 const FINAL_GUARD_KEY = '__VIDEO_PUBLISHER_FINAL_GUARD__';
 let activeTaskSpace = null;
 let taskSpaceRecovery = null;
+let activeTaskSpaceProfile = null;
 
 const compactText = value => String(value || '').replace(/\s+/g, ' ').trim();
 const unique = values => [...new Set((values || []).filter(Boolean))];
@@ -37,18 +38,77 @@ function failedGate(evidence = {}, extra = {}) {
   return { ok: false, evidence, ...extra };
 }
 
+function profileError(code, message, evidence = null) {
+  return Object.assign(new Error(message), { code, evidence });
+}
+
+// 账号 → Ego Profile pinning (月明 2026-10-21). The runner header always defines
+// `accountBinding` ({ account, label, egoProfileId, platform, expected }). A task
+// space is usable only after listTaskSpaces() proves it belongs to that Profile.
+function requireAccountBinding() {
+  const binding = typeof accountBinding !== 'undefined' ? accountBinding : null;
+  if (!binding || typeof binding.egoProfileId !== 'string' || !binding.egoProfileId.trim()) {
+    throw profileError('ACCOUNT_BINDING_MISSING', '发布账号未绑定 Ego Profile；拒绝选择或新建任务空间');
+  }
+  return binding;
+}
+
+async function taskSpaceEntries() {
+  if (typeof listTaskSpaces !== 'function') throw profileError('PROFILE_UNVERIFIABLE', '当前 Ego Lite 不提供 listTaskSpaces()，无法核对任务空间所属 Profile');
+  const entries = await listTaskSpaces();
+  return Array.isArray(entries) ? entries : [];
+}
+
+function checkEntryProfile(entry, binding, space = entry) {
+  const evidence = { account: binding.account, expectedProfileId: binding.egoProfileId, taskSpaceId: space?.id ?? null, taskSpaceName: space?.name ?? null, observedProfileId: entry?.profileId ?? null, observedProfileName: entry?.profileName ?? null };
+  if (!entry || typeof entry.profileId !== 'string' || !entry.profileId) throw profileError('PROFILE_UNVERIFIABLE', '无法读到任务空间所属 Ego Profile；不继续', evidence);
+  if (entry.profileId !== binding.egoProfileId) throw profileError('PROFILE_MISMATCH', `任务空间属于 Profile ${entry.profileId}，不是${binding.label || binding.account}的 ${binding.egoProfileId}；不复用、不换 Profile`, evidence);
+  return evidence;
+}
+
+async function assertActiveSpaceProfile(binding) {
+  const entries = await taskSpaceEntries();
+  const entry = entries.find(item => Number(item.id) === Number(activeTaskSpace?.id));
+  const evidence = checkEntryProfile(entry, binding, activeTaskSpace);
+  activeTaskSpaceProfile = { profileId: entry.profileId, profileName: entry.profileName ?? null, checkedAt: new Date().toISOString() };
+  return evidence;
+}
+
+// Reuse a same-name space only after its Profile matches; otherwise create the
+// space inside the bound Profile. Never falls back to the active/last Profile.
+async function attachOrCreatePinned(name, binding) {
+  const entries = await taskSpaceEntries();
+  const same = entries.filter(item => item.name === name);
+  if (same.length > 1) throw profileError('PROFILE_UNVERIFIABLE', `有 ${same.length} 个同名任务空间「${name}」，无法确定复用哪一个`, { taskSpaceIds: same.map(item => item.id) });
+  if (same.length === 1) {
+    checkEntryProfile(same[0], binding);
+    return await useOrCreateTaskSpace(Number(same[0].id));
+  }
+  if (typeof taskSpace !== 'function') throw profileError('PROFILE_UNVERIFIABLE', '当前 Ego Lite 不提供 taskSpace(name, { profileId })，不能按 Profile 新建任务空间');
+  const handle = await taskSpace(name, { profileId: binding.egoProfileId });
+  return await useOrCreateTaskSpace(Number(handle.spaceId));
+}
+
 async function selectTaskSpace() {
+  const binding = requireAccountBinding();
   const raw = String(taskSpaceRef || '').trim();
   const ref = raw && /^\d+$/.test(raw) ? Number(raw) : (raw || taskName);
+  const existingOnly = typeof existingTaskSpaceOnly !== 'undefined' && existingTaskSpaceOnly === true;
+  const unavailable = reason => Object.assign(new Error(reason), { code: 'RECORDED_TASK_SPACE_UNAVAILABLE' });
+  if (existingOnly && (typeof ref !== 'number' || ref < 1 || !taskName)) throw unavailable('metadata-only requires an existing numeric task-space id and exact recorded name');
   try {
-    activeTaskSpace = await useOrCreateTaskSpace(ref);
+    activeTaskSpace = typeof ref === 'number' ? await useOrCreateTaskSpace(ref) : await attachOrCreatePinned(ref, binding);
     const identityMismatch = typeof ref === 'number'
       && Boolean(taskName)
       && Boolean(activeTaskSpace?.name)
       && activeTaskSpace.name !== taskName;
+    if (existingOnly && (Number(activeTaskSpace?.id) !== ref || activeTaskSpace?.name !== taskName)) {
+      activeTaskSpace = null;
+      throw unavailable('recorded task-space identity/name changed; metadata-only cannot create or select a replacement');
+    }
     if (identityMismatch) {
       const conflictingTaskSpace = activeTaskSpace;
-      activeTaskSpace = await useOrCreateTaskSpace(taskName);
+      activeTaskSpace = await attachOrCreatePinned(taskName, binding);
       taskSpaceRecovery = {
         recreated: true,
         reason: 'task_space_identity_mismatch',
@@ -61,18 +121,43 @@ async function selectTaskSpace() {
   } catch (error) {
     const missingRecordedSpace = typeof ref === 'number' && /task space not found/i.test(String(error?.message || error));
     if (!missingRecordedSpace) throw error;
-    activeTaskSpace = await useOrCreateTaskSpace(taskName);
+    if (existingOnly) { activeTaskSpace = null; throw unavailable('recorded task space not found; metadata-only cannot create a replacement'); }
+    activeTaskSpace = await attachOrCreatePinned(taskName, binding);
     taskSpaceRecovery = { recreated: true, reason: 'task_space_not_found', previousTaskSpaceId: ref, taskSpaceId: activeTaskSpace?.id ?? null, taskSpaceName: activeTaskSpace?.name || taskName };
   }
+  // Every path (recorded id, same name, newly created) is re-proven against the
+  // bound Profile before any tab is touched.
+  try { await assertActiveSpaceProfile(binding); }
+  catch (error) { activeTaskSpace = null; activeTaskSpaceProfile = null; throw error; }
   return activeTaskSpace;
+}
+
+// Save a screenshot of the verified creator-home header for the final preview.
+// Returns { path } or { error }; a failed capture never fakes evidence.
+async function captureAccountHeader(page, label) {
+  try {
+    const dir = typeof accountScreenshotDir !== 'undefined' && accountScreenshotDir ? accountScreenshotDir : '';
+    if (!dir) return { path: null, error: 'account screenshot dir not configured' };
+    fs.mkdirSync(dir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const file = path.join(dir, `account-${platform}-${label || 'target'}-${stamp}.png`);
+    const saved = await page.screenshot({ path: file });
+    return { path: typeof saved === 'string' && saved ? saved : file };
+  } catch (error) {
+    return { path: null, error: String(error?.message || error).slice(0, 300) };
+  }
 }
 
 async function selectPlatformTab() {
   const tabs = await listTabs();
-  const match = tabs.find(tab => PLATFORM_HOSTS[platform].test(String(tab.url || '')));
+  const matching = tabs.filter(tab => PLATFORM_HOSTS[platform].test(String(tab.url || '')));
+  const match = platform === 'douyin'
+    ? matching.find(tab => /\/creator-micro\/content\//.test(String(tab.url || ''))) || matching[0]
+    : matching[0];
   if (match) {
     await switchTab(match.targetId);
   } else {
+    if (typeof existingTaskSpaceOnly !== 'undefined' && existingTaskSpaceOnly === true) return { ok: false, blocker: typedBlocker('STATE_AMBIGUOUS', 'recorded task space has no matching platform tab; metadata-only cannot create a replacement') };
     await openOrReuseTab(PLATFORM_URLS[platform], { wait: true, timeout: 45 });
   }
   await wait(1.5);
@@ -136,7 +221,8 @@ function checkpointReceipts(receipts) {
     fingerprint: jobFingerprint,
     taskSpaceId: activeTaskSpace?.id ?? null,
     writtenAt: new Date().toISOString(),
-    receipts,
+    // Signed CDN URLs never reach disk: keep origin+path and a digest only.
+    receipts: redactDeep(receipts),
   };
   fs.mkdirSync(path.dirname(receiptCheckpointPath), { recursive: true });
   const temp = `${receiptCheckpointPath}.${process.pid}.tmp`;
@@ -145,8 +231,52 @@ function checkpointReceipts(receipts) {
   return { ok: true, path: receiptCheckpointPath, writtenAt: payload.writtenAt };
 }
 
+// Save the image currently shown in one cover slot so the Node-side runner can
+// prove its visual identity against the approved asset (lib/visual-identity.mjs).
+// The file stays on this Mac under the job dir; only its path, sha256 and the
+// URL digest are reported. Failure is evidence, never a pass.
+async function captureSlotImage(slot, url) {
+  if (!slotCaptureDir || !url) return { ok: false, slot, reason: slotCaptureDir ? 'slot url missing' : 'slot capture dir not configured' };
+  try {
+    let bytes;
+    if (/^https?:/i.test(url)) {
+      const response = await fetch(url);
+      if (!response.ok) return { ok: false, slot, reason: `slot image HTTP ${response.status}`, urlDigest: urlDigest(url) };
+      bytes = Buffer.from(await response.arrayBuffer());
+    } else if (/^(blob:|data:)/i.test(url)) {
+      const encoded = await js(String.raw`(async (src) => { const blob = await (await fetch(src)).blob(); return await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(',')[1] || ''); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob) }) })(${JSON.stringify(url)})`);
+      bytes = Buffer.from(String(encoded || ''), 'base64');
+    } else return { ok: false, slot, reason: 'unsupported slot url scheme' };
+    if (!bytes.length) return { ok: false, slot, reason: 'empty slot image' };
+    const digest = urlDigest(url);
+    fs.mkdirSync(slotCaptureDir, { recursive: true, mode: 0o700 });
+    const file = path.join(slotCaptureDir, `${platform}-${slot}-${digest.slice(7, 23)}.img`);
+    fs.writeFileSync(file, bytes, { mode: 0o600 });
+    return { ok: true, slot, file, bytes: bytes.length, sha256: crypto.createHash('sha256').update(bytes).digest('hex'), urlDigest: digest, url: redactUrl(url), capturedAt: new Date().toISOString(), taskSpaceId: activeTaskSpace?.id ?? null };
+  } catch (error) {
+    return { ok: false, slot, reason: String(error?.message || error) };
+  }
+}
+
+async function captureSlots(urlsBySlot) {
+  const captures = {};
+  for (const [slot, urls] of Object.entries(urlsBySlot || {})) {
+    const url = (urls || []).find(Boolean);
+    if (url) captures[slot] = await captureSlotImage(slot, url);
+  }
+  return captures;
+}
+
 async function preparePlatform() {
-  const task = await selectTaskSpace();
+  let task;
+  try { task = await selectTaskSpace(); }
+  catch (error) {
+    if (['PROFILE_MISMATCH', 'PROFILE_UNVERIFIABLE', 'ACCOUNT_BINDING_MISSING'].includes(error?.code)) {
+      return { task: null, selected: { ok: false, blocker: typedBlocker(error.code, String(error.message), { retryable: false, requiresUser: true, evidence: error.evidence || null }) } };
+    }
+    if (error?.code !== 'RECORDED_TASK_SPACE_UNAVAILABLE') throw error;
+    return { task: null, selected: { ok: false, blocker: typedBlocker('STATE_AMBIGUOUS', String(error.message), { retryable: false }) } };
+  }
   const selected = await selectPlatformTab();
   if (!selected.ok) return { task, selected };
   const guard = await armFinalPublishGuard();
@@ -233,7 +363,7 @@ async function removeExactStaleMask(textPattern) {
 }
 
 async function emitObservation(observation) {
-  const guard = await inspectFinalPublishGuard().catch(error => ({
+  const guard = !activeTaskSpace ? { armed: false, blockedAttempts: 0 } : await inspectFinalPublishGuard().catch(error => ({
     armed: false,
     blockedAttempts: 0,
     error: String(error?.message || error),
@@ -245,6 +375,8 @@ async function emitObservation(observation) {
     taskSpaceId: activeTaskSpace?.id ?? null,
     taskSpace: activeTaskSpace?.name || taskName,
     taskSpaceRecovery,
+    taskSpaceProfile: activeTaskSpaceProfile,
+    account: typeof accountBinding !== 'undefined' && accountBinding ? { account: accountBinding.account, label: accountBinding.label, egoProfileId: accountBinding.egoProfileId } : null,
     observedAt: new Date().toISOString(),
     finalPublishClicked: false,
     ...observation,

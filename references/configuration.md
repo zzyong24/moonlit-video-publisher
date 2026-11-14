@@ -31,6 +31,16 @@ Follow this order so users are never asked about platforms they do not use:
 
 `availablePlatforms` records the creator accounts the user says they have and can log into. `defaultPlatforms` is only the subset selected when a run does not name platforms explicitly.
 
+## Account Availability Versus Destination Identity
+
+`availablePlatforms` and `defaultPlatforms` indicate declared platform availability, not which account is currently logged in. Ego Profile names and task-space names are also insufficient. Task spaces in the same Profile share login state; a login/account switch can affect every publishing space using that Profile.
+
+Resolve the user's intended destination and read the actual creator-home name and stable platform ID before finalizing a work's package. Douyin requires per-package `expectedAccounts.douyin.name` and `expectedAccounts.douyin.douyinId`; no business account is supplied as a Skill/config default. Do not replace the intended identity with the observed wrong account. See [the package/migration contract](intake-workflow.md#destination-account-and-versioned-package).
+
+Douyin and Xiaohongshu have an automatic `targetAccount` gate with fresh same-space, same-Profile scoped name/ID evidence. Bilibili and WeChat Channels have no equivalent gate yet; manually compare their actual account identity with the intended destination before upload/preparation and immediately before submission. Login evidence is not publish authorization.
+
+Which account and which Ego Profile a package publishes to comes from the separate per-user `accounts.json` next to `config.json` (`VIDEO_PUBLISHER_ACCOUNTS` overrides). It maps 大号/小号 → `egoProfileId` → platform → expected name/ID, defaults to 大号, limits 小号 to Douyin/Xiaohongshu and fails closed when anything is missing. See [account-profiles.md](account-profiles.md).
+
 ## Onboarding Command
 
 Use repeatable `--available-platform` flags for real account availability and repeatable `--platform` flags for the default subset:

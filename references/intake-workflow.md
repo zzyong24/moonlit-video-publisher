@@ -4,6 +4,31 @@ Start from a video link or local file path.
 
 Before intake, read `node scripts/config.mjs status`. Use `sourceDirectory`, `availablePlatforms`, `defaultPlatforms`, `contentProfile`, platform defaults, and cover preference as proposals only. A current user instruction or explicit package field wins within `availablePlatforms`. If the user asks for an unavailable platform, update onboarding and confirm the account before any browser work.
 
+## Destination Account And Versioned Package
+
+1. Resolve the intended account from the current user request and work's destination record. If it is already unambiguous, reuse it without asking again. The currently logged-in account is evidence to compare, not authority to redefine the destination.
+2. Read the actual creator-home identity through the sole browser controller before finalizing the package. Capture both display name and stable platform ID, not only the avatar, Profile name or task-space name. Do not navigate away from an ongoing upload; use the same task space's dedicated read-only home Page.
+3. Destination account: omit `account` for 大号; write `"account": "xiaohao"` only when 月明 explicitly asked for 小号 (Douyin/Xiaohongshu only). `expectedAccounts.<platform>` is filled from `accounts.json` ([account-profiles.md](account-profiles.md)); a hand-written entry must match it exactly. For Douyin, the bound identity has both exact strings:
+
+```json
+{
+  "expectedAccounts": {
+    "douyin": {
+      "name": "目标创作者昵称",
+      "douyinId": "replace_with_target_douyin_id"
+    }
+  }
+}
+```
+
+The full editable [package example](../assets/package.example.json) uses placeholders and nonexistent paths. Replace them with the confirmed media, intended identity, actual copy, approved covers and truthful production declaration; it is not a ready-to-upload package.
+
+Douyin preflight rejects a missing/malformed identity before browser execution. Its `targetAccount` gate is distinct from `authenticated`, rechecks name plus ID through a scoped creator-home header and accepts only same-space evidence no older than 15 seconds. No persistent identity receipt grants future upload or submission. Xiaohongshu has the same automatic gate (`expectedAccounts.xiaohongshu = {name, xhsId}`); Bilibili and WeChat Channels still require a fresh manual destination-account check; do not claim their login gate verifies identity automatically.
+
+For legacy packages missing the new fields, preserve the original package, job, fingerprints and release events. Create a versioned corrected package containing the intended destination, record what it supersedes, and rerun package validation plus the relevant guoshen review. Do not edit the historical package or rewrite a job fingerprint to make it resume. If no matching upload exists, start a corrected job only for the affected platform. If one already exists under the correct account, retain its upload/page and plan verified in-place recovery using the corrected package; never duplicate an upload to apply identity metadata. A draft or post under the wrong account is a separate incident: do not silently delete, move or republish it as recovery.
+
+Task spaces sharing one Ego Profile share session state. An authorized account switch requires all affected publishing controllers to stop and all destinations to be reverified; opening another space does not isolate the login.
+
 ## Video Input
 
 ```text
@@ -119,6 +144,8 @@ Before browser form filling:
 小红书 tags:
 抖音描述:
 抖音 topics:
+抖音目标账号: expectedAccounts.douyin.name + douyinId，均必填并与当前主页核对
+其他平台目标账号: 人工核对实际昵称 + 稳定ID，记录证据
 B站简介:
 B站 tags:
 B站允许保留的平台自动 tags: 留空，除非用户明确确认

@@ -1,5 +1,7 @@
 import fs from "node:fs";
 import { loadConfig } from "./config.mjs";
+import { validateExpectedDouyinAccount, ACCOUNT_ID_FIELDS } from "../v2/lib/expected-account.mjs";
+import { AccountConfigError, loadAccounts, normalizeAccountKey, resolvePublishAccount } from "./config.mjs";
 
 export function stripHash(tag) {
   return String(tag || "").trim().replace(/^#+\s*/, "").trim();
@@ -209,7 +211,7 @@ export function validateCoverPackage(pkg, platform) {
 }
 
 export function validateDouyinPackage(pkg) {
-  const errors = validateCommonPackage(pkg);
+  const errors = [...validateCommonPackage(pkg), ...validateExpectedDouyinAccount(pkg)];
   errors.push(...validateCoverPackage(pkg, "douyin"));
   const douyinTitle = String(pkg.platformTitle?.douyin || pkg.title || "");
   if (douyinTitle.length > 30) errors.push(`douyin title is ${douyinTitle.length}/30`);
@@ -254,4 +256,38 @@ export function assertPackage(errors) {
   if (errors.length) {
     throw new Error(errors.join("; "));
   }
+}
+
+// Bind the package to one publishing account for one platform (月明 2026-10-21):
+// default 大号; 小号 only when the package says account="xiaohao"/"小号"; 小号 on
+// anything other than Douyin/Xiaohongshu, or a missing mapping, is an error.
+// On success fills pkg.accountBinding[platform] and pkg.expectedAccounts[platform]
+// from the mapping. A hand-written expectedAccounts entry must agree with it.
+// Returns a list of errors (empty = bound). Never throws for mapping problems.
+export function bindPublishAccount(pkg, platform, { accounts, accountsPath } = {}) {
+  let binding;
+  try {
+    const mapping = accounts || loadAccounts({ accountsPath });
+    binding = resolvePublishAccount(mapping, pkg.account, platform);
+  } catch (error) {
+    if (error instanceof AccountConfigError) return [`${error.code}: ${error.message}`];
+    throw error;
+  }
+  const idField = ACCOUNT_ID_FIELDS[platform];
+  const existing = pkg.expectedAccounts?.[platform];
+  if (existing !== undefined) {
+    const sameName = typeof existing?.name === "string" && existing.name.trim() === binding.expected.name;
+    const sameId = typeof existing?.[idField] === "string" && existing[idField].trim() === binding.expected.id;
+    if (!sameName || !sameId) {
+      return [`ACCOUNT_MAPPING_CONFLICT: expectedAccounts.${platform} in the package does not match ${binding.label}(${binding.account}) in the account mapping; fix the package or the mapping, never copy the current login`];
+    }
+  }
+  pkg.account = binding.account;
+  pkg.expectedAccounts = { ...(pkg.expectedAccounts || {}), [platform]: { name: binding.expected.name, [idField]: binding.expected.id } };
+  pkg.accountBinding = { ...(pkg.accountBinding || {}), [platform]: binding };
+  return [];
+}
+
+export function requestedAccountKey(pkg) {
+  try { return normalizeAccountKey(pkg?.account); } catch { return null; }
 }

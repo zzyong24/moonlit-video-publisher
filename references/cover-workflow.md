@@ -84,3 +84,13 @@ New packages may set cover.platformAssets keyed by platform, with one primary {s
 B站2026-10-12当前编辑器实际显示首页推荐（4:3）、个人空间（16:9）两个槽位，以及“两个比例的封面都会被展示给观众”。本期必须上传已分别生成的4:3/16:9成图，关闭“双比例同步改动”，分别激活对应画布并替换，保存后独立回读两个效果。单一main-card URL不能证明两个比例均已正确；额外槽位需hash绑定实际图像证据后才能final门禁。
 
 生产阶段一次备齐所选平台所有入口的画幅，发布器只替换已验收的对应成图，不做设计性裁切/拉伸/补边。用户委托同风格Agent验收时不反复索取封面批准。
+
+## Visual Identity Proof
+
+Since 2.8.0 Bilibili and WeChat Channels slot receipts carry `visual` proof:
+
+- Capture: the actual slot image shown on the page is saved under `<job>/cover-slots/<platform>-<slot>-<digest>.img` (dir 0700, file 0600). Evidence and receipts keep only path, sha256 and URL digest. These files stay on the Mac.
+- Compare: macOS `sips` resamples both images to 17×16; a 256-bit difference hash is compared by Hamming distance. Thresholds: `slot_url` ≤ 40, screenshot ≤ 48, and the expected asset must be at least 16 closer than the nearest other approved asset.
+- Calibration (聆思 v5, 2026-10-26): real slots measured 3–7 to the right asset and ≥129 to the wrong one; a hand-cropped Bilibili 16:9 screenshot measured 36 vs 69 to the 4:3 asset.
+- Fail closed: missing capture, unreadable image, distance or margin out of range → cover gate false with `PLATFORM_REJECTED_ASSET`. Never relax thresholds to make a run pass; re-capture or re-upload instead.
+- dHash proves "this slot shows that artwork", not crop quality. Final preview review by 月明 is still required.

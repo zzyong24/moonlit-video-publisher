@@ -2,12 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { BLOCKER, classifyVerdict, evaluateObservation, requiredGates } from "../lib/model.mjs";
 
+function accountEvidence(platform) {
+  const identity = platform === "xiaohongshu" ? { name: "Fixture XHS Creator", xhsId: "fixture_xhs_id" } : { name: "Fixture Creator", douyinId: "fixture_creator_id" };
+  const sourceUrl = platform === "xiaohongshu" ? "https://creator.xiaohongshu.com/new/home" : "https://creator.douyin.com/creator-micro/home";
+  return { expected: identity, actual: { ...identity }, method: "creator-home-dom", scopeConfirmed: true, observedAt: new Date().toISOString(), sourceUrl, taskSpaceId: 1, taskSpaceName: "fixture space" };
+}
+
 function observation(platform, overrides = {}) {
   const gates = Object.fromEntries(requiredGates(platform).map(name => [name, {
     ok: true,
-    evidence: name === "safety" ? { finalPublishClicked: false, guardArmed: true, blockedAttempts: 0 } : {},
+    evidence: name === "safety" ? { finalPublishClicked: false, guardArmed: true, blockedAttempts: 0 } : name === "targetAccount" ? accountEvidence(platform) : {},
   }]));
-  return { platform, phase: "verify", taskSpaceId: 1, gates: { ...gates, ...(overrides.gates || {}) }, blocker: overrides.blocker || null };
+  return { platform, phase: "verify", taskSpaceId: 1, taskSpace: "fixture space", gates: { ...gates, ...(overrides.gates || {}) }, blocker: overrides.blocker || null };
 }
 
 test("READY is computed only when every required gate is verified", () => {
@@ -71,4 +77,19 @@ test("content-only drafts cannot become READY and need review instead of another
   assert.equal(verdict.ready, false);
   assert.deepEqual(verdict.missing, ["publishReview"]);
   assert.equal(classifyVerdict(verdict), "needs_review");
+});
+
+test('metadata phases and metadata-only first inspection cannot grant READY while preserving real gate truth', () => {
+  for (const overrides of [{ phase: 'metadata' }, { phase: 'inspect', preparationMode: 'metadata_only' }]) {
+    const actual = { ...observation('xiaohongshu'), ...overrides };
+    const verdict = evaluateObservation(actual);
+    assert.equal(verdict.ready, false);
+    assert.equal(verdict.preparationOnly, true);
+    assert.equal(verdict.requiresFullVerification, true);
+    assert.deepEqual(verdict.missing, []);
+    assert.equal(verdict.blocker, null);
+    assert.equal(Object.values(verdict.gates).every(gate => gate.ok === true), true);
+    assert.equal(classifyVerdict(verdict), 'needs_verification');
+  }
+  assert.equal(evaluateObservation(observation('xiaohongshu')).ready, true);
 });

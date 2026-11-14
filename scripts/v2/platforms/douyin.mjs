@@ -2,10 +2,28 @@ const douyinTitle = pkg.platformTitle.douyin;
 const douyinDescription = pkg.douyinDescription;
 const douyinTopics = pkg.douyinTopics;
 const douyinCustomCover = pkg.cover?.uploadCustomCover === true;
+const douyinMappedCoverAssets = pkg.cover?.platformAssets?.douyin;
 const douyinCoverAssets = [
-  { slot: 'portrait', ratio: '3:4', path: String(pkg.cover?.vertical3x4Path || '') },
-  { slot: 'landscape', ratio: '4:3', path: String(pkg.cover?.horizontal4x3Path || '') },
+  { slot: 'portrait', ratio: '3:4', path: String(douyinMappedCoverAssets === undefined ? pkg.cover?.vertical3x4Path || '' : douyinMappedCoverAssets.find(asset => asset.slot === 'portrait' && asset.ratio === '3:4')?.path || '') },
+  { slot: 'landscape', ratio: '4:3', path: String(douyinMappedCoverAssets === undefined ? pkg.cover?.horizontal4x3Path || '' : douyinMappedCoverAssets.find(asset => asset.slot === 'landscape' && asset.ratio === '4:3')?.path || '') },
 ];
+
+function douyinSyncSettings(state) {
+  const explicitOff = state.noSyncChecked && !state.syncOn && !state.simultaneousChecked;
+  if (explicitOff) return okGate({ mode: 'explicit_off', simultaneousPublish: false, toutiaoSync: false });
+  const signature = state.publishSettingsSignature || {};
+  const families = [['公开', '好友可见', '仅自己可见'], ['允许', '不允许'], ['立即发布', '定时发布']];
+  const labels = signature.radioLabels || [];
+  const completeGroups = families.every(family => family.every(text => labels.filter(label => label.text === text).length === 1)
+    && labels.filter(label => family.includes(label.text) && label.checked === true).length === 1);
+  const knownEditor = /^https:\/\/creator\.douyin\.com\/creator-micro\/content\/(?:publish|upload|edit|post\/video)(?:[/?#]|$)/.test(signature.url || '')
+    && signature.titleControlVisible === true && signature.descriptionControlVisible === true
+    && signature.editorSectionsVisible === true && signature.settingsHeadingVisible === true;
+  const syncAbsent = !state.syncFound && !state.syncOn && !state.noSyncChecked && !state.simultaneousChecked
+    && signature.syncCluesPresent === false && signature.unknownSwitchCount === 0;
+  if (knownEditor && completeGroups && syncAbsent) return okGate({ mode: 'not_applicable', reason: 'recognized complete publishing editor exposes no simultaneous-publication controls', signature });
+  return failedGate({ simultaneousPublish: state.simultaneousChecked, noSyncChecked: state.noSyncChecked, toutiaoSync: state.syncOn, syncFound: state.syncFound, signature, knownEditor, completeGroups, syncAbsent });
+}
 
 async function inspectDouyin() {
   const state = await js(String.raw`((expectedTitle, expectedDescription, requestedTopics) => {
@@ -59,6 +77,13 @@ async function inspectDouyin() {
     const syncRadios=[...document.querySelectorAll('label')].map(el=>({text:compact(el.innerText||el.textContent||''),input:el.querySelector('input.radio-native-p6VBGt,input[type="checkbox"]')})).filter(item=>/^(不同时发布|同时发布到)/.test(item.text))
     const noSyncChecked=Boolean(syncRadios.find(item=>item.text.startsWith('不同时发布'))?.input?.checked)
     const simultaneousChecked=Boolean(syncRadios.find(item=>item.text.startsWith('同时发布到'))?.input?.checked)
+    const settingRows=[...document.querySelectorAll('label')].filter(visible).map(el=>({text:compact(el.innerText||el.textContent||''),input:el.querySelector('input[type="radio"],input[type="checkbox"]')})).filter(item=>item.input);
+    const radioLabels=settingRows.map(item=>({text:item.text,checked:item.input.checked===true}));
+    const knownSettingInputs=new Set(settingRows.filter(item=>['公开','好友可见','仅自己可见','允许','不允许','立即发布','定时发布'].includes(item.text)).map(item=>item.input));
+    const switchControls=[...document.querySelectorAll('[role="switch"],input[type="checkbox"],[class*="semi-switch"]')].filter(visible);
+    const unknownSwitchCount=switchControls.filter(control=>!knownSettingInputs.has(control)).length;
+    const syncCluesPresent=/不同时发布|同时发布|同步发布|同步到|今日头条|西瓜视频|头条同步/.test(text)||syncRadios.length>0||[...document.querySelectorAll('input,button,[role="switch"]')].some(el=>/(?:^|[\s_-])(?:sync|toutiao|xigua)(?:$|[\s_-])/i.test([el.name,el.id,el.getAttribute('aria-label'),el.getAttribute('data-testid')].filter(Boolean).join(' ')));
+    const publishSettingsSignature={url:location.href,titleControlVisible:[...document.querySelectorAll('input')].some(el=>(el.placeholder||'').includes('作品标题')&&visible(el)),descriptionControlVisible:Boolean(editor&&visible(editor)),editorSectionsVisible:/作品描述|基础信息/.test(text),settingsHeadingVisible:/发布设置/.test(text),radioLabels,syncCluesPresent,unknownSwitchCount};
     const coverUrls = {}
     for (const [slot,re] of [['landscape',/横封面\s*4\s*:\s*3|横封面4:3/],['portrait',/竖封面\s*3\s*:\s*4|竖封面3:4/]]) {
       const card=[...document.querySelectorAll('.coverControl-CjlzqC')].find(el=>re.test(compact(el.innerText||el.textContent||'')))
@@ -69,7 +94,7 @@ async function inspectDouyin() {
     const dialogs=[...document.querySelectorAll('[role="dialog"],.semi-modal,[class*="modal-mask"],[class*="dialog-mask"]')]
       .map(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {text:compact(el.innerText||el.textContent||'').slice(0,500),cls:String(el.className||''),w:r.width,h:r.height,display:s.display,visibility:s.visibility,opacity:s.opacity}})
       .filter(item=>item.w>20&&item.h>20&&item.display!=='none'&&item.visibility!=='hidden'&&!/animate-hide|leave-active/.test(item.cls))
-    return {text:text.slice(0,2800),title,editorText,prose,selected,plainResidue,duplicates,tokenCounts,uploadSucceeded,uploading,uploadFailed,loginRequired,resumeDialog,identityMatches,identityEmpty,knownMisroutedInput,syncOn,syncFound:Boolean(sync),noSyncChecked,simultaneousChecked,coverUrls,dialogs}
+    return {text:text.slice(0,2800),title,editorText,prose,selected,plainResidue,duplicates,tokenCounts,uploadSucceeded,uploading,uploadFailed,loginRequired,resumeDialog,identityMatches,identityEmpty,knownMisroutedInput,syncOn,syncFound:Boolean(sync),noSyncChecked,simultaneousChecked,publishSettingsSignature,coverUrls,dialogs}
   })(${JSON.stringify(douyinTitle)}, ${JSON.stringify(douyinDescription)}, ${JSON.stringify(douyinTopics)})`);
   const buttons = await inspectFinalButtons(/^发布$/);
   const finalButton = buttons.find(button=>button.buttonish) || buttons[0] || null;
@@ -77,7 +102,7 @@ async function inspectDouyin() {
   const expectedBySlot = Object.fromEntries(douyinCoverAssets.map(asset=>[asset.slot,asset]));
   const coverReceiptOk = douyinCustomCover && receipt && ['portrait','landscape'].every(slot => {
     const item=receipt.slots?.[slot]; const expected=expectedBySlot[slot];
-    return item?.assetPath===expected.path && item?.ratio===expected.ratio && item?.afterUrl && (state.coverUrls[slot]||[]).includes(item.afterUrl);
+    return item?.assetPath===expected.path && item?.ratio===expected.ratio && item?.afterUrl && receiptUrlMatches(item.afterUrl, state.coverUrls[slot]||[]);
   }) && receipt.slots.portrait.afterUrl!==receipt.slots.landscape.afterUrl;
   const defaultCoverOk = !douyinCustomCover && ['portrait','landscape'].some(slot=>(state.coverUrls[slot]||[]).length>0 || /选择封面|设置封面/.test(state.text));
   return {
@@ -88,7 +113,7 @@ async function inspectDouyin() {
       title: state.title===douyinTitle ? okGate({expected:douyinTitle,actual:state.title}) : failedGate({expected:douyinTitle,actual:state.title}),
       description: state.prose===compactText(douyinDescription) ? okGate({expected:douyinDescription,actual:state.prose}) : failedGate({expected:douyinDescription,actual:state.prose,editorText:state.editorText}),
       tags: state.selected.length===douyinTopics.length&&!state.plainResidue.length&&!state.duplicates.length ? okGate({requested:douyinTopics,selected:state.selected,tokenCounts:state.tokenCounts}) : failedGate({requested:douyinTopics,selected:state.selected,plainResidue:state.plainResidue,duplicates:state.duplicates,tokenCounts:state.tokenCounts,editorText:state.editorText}),
-      settings: state.noSyncChecked&&!state.syncOn&&!state.simultaneousChecked ? okGate({simultaneousPublish:false,toutiaoSync:false}) : failedGate({simultaneousPublish:state.simultaneousChecked,noSyncChecked:state.noSyncChecked,toutiaoSync:state.syncOn,syncFound:state.syncFound}),
+      settings: douyinSyncSettings(state),
       cover: coverReceiptOk||defaultCoverOk ? okGate({custom:douyinCustomCover,urls:state.coverUrls,receipt}) : failedGate({custom:douyinCustomCover,urls:state.coverUrls,receipt,reason:douyinCustomCover&&!receipt?'custom cover receipt missing':'cover not verified'}),
       noBlockingDialog: state.dialogs.length===0 ? okGate({active:[]}) : failedGate({active:state.dialogs}),
       finalButton: finalButton&&!finalButton.disabled ? okGate(finalButton) : failedGate({buttons}),
@@ -148,6 +173,8 @@ async function uploadDouyin() {
   }
   const attempts=[];
   for(let attempt=1;attempt<=2;attempt+=1){
+    const account = await verifyDouyinTargetAccount();
+    if (!account.ok) return { ...before, gates: { ...before.gates, targetAccount: { ok: false, evidence: account.evidence } }, blocker: account.blocker };
     const exposed=await js(String.raw`(() => { const input=[...document.querySelectorAll('input[type=file]')].find(el=>/video|\.mp4|\.mov|\.mkv|\.flv/i.test(el.accept||'')); if(!input)return {ok:false,reason:'douyin video input missing'}; input.value=''; input.id='vp2-douyin-video'; return {ok:true,selector:'#vp2-douyin-video'} })()`);
     if(!exposed.ok)return {...before,blocker:typedBlocker('SELECTOR_DRIFT',exposed.reason)};
     try{await uploadFile(exposed.selector,videoPath);}catch(error){return {...before,blocker:typedBlocker('UPLOAD_NOT_STARTED',String(error?.message||error),{retryable:true,evidence:{attempt}})};}
@@ -352,6 +379,8 @@ async function recoverDouyinTopicPrefix(before) {
 }
 
 async function turnOffDouyinSync() {
+  const before = await inspectDouyin();
+  if (before.gates.settings.ok) return { ok: true, already: true, evidence: before.gates.settings.evidence };
   const located=await js(String.raw`(() => {const c=v=>String(v||'').replace(/\s+/g,' ').trim();const label=[...document.querySelectorAll('label')].find(el=>c(el.innerText||el.textContent||'').startsWith('不同时发布'));if(!label)return {ok:false,reason:'douyin no-sync radio missing'};const input=label.querySelector('input');label.scrollIntoView({block:'center',inline:'center'});const r=label.getBoundingClientRect();return {ok:true,on:Boolean(input?.checked),point:{x:r.left+r.width/2,y:r.top+r.height/2}}})()`);
   if(!located.ok)return located;if(!located.on){await click([located.point.x,located.point.y],{label:'disable douyin simultaneous publish'}).catch(()=>{});await wait(1)}const after=await inspectDouyin();return after.gates.settings.ok?{ok:true,wasOn:!located.on}:{ok:false,reason:'douyin simultaneous publish remained enabled',evidence:after.gates.settings.evidence};
 }
@@ -383,11 +412,11 @@ async function repairDelayedDouyinCoverReceipt(){
     landscape:(urls.landscape||[]).find(url=>url&&!(urls.portrait||[]).includes(url)),
   };
   if(!live.portrait||!live.landscape)return {ok:false,skipped:true};
-  const mirroredCapture=prior.slots.portrait.afterUrl===prior.slots.landscape.afterUrl&&(urls.portrait||[]).includes(prior.slots.portrait.afterUrl);
+  const mirroredCapture=prior.slots.portrait.afterUrl===prior.slots.landscape.afterUrl&&receiptUrlMatches(prior.slots.portrait.afterUrl,urls.portrait||[]);
   for(const slot of ['portrait','landscape']){
     const item=prior.slots[slot];
-    if(live[slot]===item.afterUrl)continue;
-    const capturedStale=(item.beforeUrls||[]).includes(item.afterUrl)&&!(item.beforeUrls||[]).includes(live[slot]);
+    if(receiptUrlMatches(item.afterUrl,[live[slot]]))continue;
+    const capturedStale=(item.beforeUrls||[]).some(url=>url===item.afterUrl||receiptUrlMatches(url,[item.afterUrl]))&&!(item.beforeUrls||[]).some(url=>receiptUrlMatches(url,[live[slot]]));
     if(!(capturedStale||(slot==='landscape'&&mirroredCapture)))return {ok:false,skipped:true};
   }
   const receipt={slots:{portrait:{...prior.slots.portrait,afterUrl:live.portrait},landscape:{...prior.slots.landscape,afterUrl:live.landscape}}};

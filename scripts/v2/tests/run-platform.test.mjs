@@ -7,6 +7,10 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parseV2Result } from "../lib/result-line.mjs";
 
+// Fixture account mapping (账号→Ego Profile→平台→昵称/ID); production reads ~/.config/video-publisher/accounts.json.
+process.env.VIDEO_PUBLISHER_ACCOUNTS = fileURLToPath(new URL('../../tests/fixtures/accounts.fixture.json', import.meta.url));
+
+
 const DIR=path.dirname(fileURLToPath(import.meta.url));
 const V2_DIR=path.dirname(DIR);
 
@@ -19,10 +23,15 @@ test("upload without guoshen review fails before any browser process",async()=>{
     await fs.promises.writeFile(videoPath,"test video fixture");
     await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Review gate",xhsTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"fixture"}}));
     await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["xiaohongshu"],declarations:{originalityPolicy:"all_videos_original"}}));
-    const env={...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_EGO_COMMAND:"must-not-run-browser"};
+    const env={...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_PLATFORM_LOCK_ROOT:path.join(root,"platform-locks"),VIDEO_PUBLISHER_V2_EGO_COMMAND:"must-not-run-browser"};
     delete env.MOONLIT_GUOSHEN_GATE;delete env.MOONLIT_GUOSHEN_DIR;delete env.MOONLIT_GUOSHEN_RECEIPT;
     const result=await run(process.execPath,[path.join(V2_DIR,"run-platform.mjs"),"xiaohongshu",packagePath,"upload"],{env});
     assert.notEqual(result.code,0);assert.match(result.stderr,/guoshen review/);assert.doesNotMatch(result.stderr,/ENOENT/);
+    const legacyGate=path.join(root,"legacy-gate.py");
+    await fs.promises.writeFile(legacyGate,'import sys\nif "--require-chain-version" in sys.argv: sys.exit("legacy gate rejects unknown chain version")\nprint("old unversioned pass")\n');
+    const oldResult=await run(process.execPath,[path.join(V2_DIR,"run-platform.mjs"),"xiaohongshu",packagePath,"upload"],{env:{...env,MOONLIT_GUOSHEN_GATE:legacyGate,MOONLIT_GUOSHEN_DIR:root,MOONLIT_GUOSHEN_RECEIPT:packagePath}});
+    assert.notEqual(oldResult.code,0);assert.match(oldResult.stderr,/legacy gate rejects/);assert.doesNotMatch(oldResult.stderr,/ENOENT/);
+
   } finally {await fs.promises.rm(root,{recursive:true,force:true});}
 });
 
@@ -34,7 +43,7 @@ test("platform runner turns an Ego process failure into structured page evidence
   await fs.promises.writeFile(videoPath,"test video fixture");
   await fs.promises.writeFile(packagePath,JSON.stringify({videoPath,title:"Ego failure",xhsTopics:["Test"],cover:{uploadCustomCover:false,useVideoFrame:true,approvalEvidence:"test fixture"}}));
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["xiaohongshu"],declarations:{originalityPolicy:"all_videos_original"}}));
-  const result=await run(process.execPath,[path.join(V2_DIR,"run-platform.mjs"),"xiaohongshu",packagePath,"inspect","ego-failure","123"],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_EGO_COMMAND:"video-publisher-missing-ego-command"}});
+  const result=await run(process.execPath,[path.join(V2_DIR,"run-platform.mjs"),"xiaohongshu",packagePath,"inspect","ego-failure","123"],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_PLATFORM_LOCK_ROOT:path.join(root,"platform-locks"),VIDEO_PUBLISHER_V2_EGO_COMMAND:"video-publisher-missing-ego-command"}});
   assert.equal(result.code,0,`${result.stderr}\n${result.stdout}`);
   const observation=parseV2Result(result.stdout);
   assert.equal(observation.taskSpaceId,123);
@@ -55,7 +64,7 @@ test("platform runner recognizes Ego's real user-takeover wording",async()=>{
   await fs.promises.writeFile(configPath,JSON.stringify({schemaVersion:1,onboarding:{completed:true},sourceDirectory:root,defaultPlatforms:["xiaohongshu"],declarations:{originalityPolicy:"all_videos_original"}}));
   await fs.promises.writeFile(fakeEgoPath,"#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' 'The user has taken control of this task space. Wait for them to finish.' >&2\nexit 1\n");
   await fs.promises.chmod(fakeEgoPath,0o755);
-  const result=await run(process.execPath,[path.join(V2_DIR,"run-platform.mjs"),"xiaohongshu",packagePath,"inspect","user-control","456"],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_EGO_COMMAND:fakeEgoPath}});
+  const result=await run(process.execPath,[path.join(V2_DIR,"run-platform.mjs"),"xiaohongshu",packagePath,"inspect","user-control","456"],{env:{...process.env,VIDEO_PUBLISHER_CONFIG:configPath,VIDEO_PUBLISHER_V2_PLATFORM_LOCK_ROOT:path.join(root,"platform-locks"),VIDEO_PUBLISHER_V2_EGO_COMMAND:fakeEgoPath}});
   assert.equal(result.code,0,`${result.stderr}\n${result.stdout}`);
   const observation=parseV2Result(result.stdout);
   assert.equal(observation.taskSpaceId,456);
@@ -64,4 +73,14 @@ test("platform runner recognizes Ego's real user-takeover wording",async()=>{
   assert.equal(observation.blocker.requiresUser,true);
   assert.match(observation.blocker.evidence.detail,/user has taken control/i);
   assert.equal(observation.finalPublishClicked,false);
+});
+
+test('metadata cannot bypass the owning controller through a direct adapter runner', async () => {
+  const env = { ...process.env, VIDEO_PUBLISHER_V2_EGO_COMMAND: 'must-not-run-browser' };
+  delete env.VIDEO_PUBLISHER_V2_METADATA_JOB_DIR;
+  delete env.VIDEO_PUBLISHER_V2_METADATA_ROOT;
+  const result = await run(process.execPath, [path.join(V2_DIR, 'run-platform.mjs'), 'bilibili', '/does/not/exist.json', 'metadata', 'same-job', '13'], { env });
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /exclusive owning publisher/);
+  assert.doesNotMatch(result.stderr, /ENOENT/);
 });

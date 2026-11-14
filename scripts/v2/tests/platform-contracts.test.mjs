@@ -22,7 +22,7 @@ test('cover repairs resolve modern task handles and wait for native image proces
   const bili=fs.readFileSync(path.join(PLATFORM_DIR,'bilibili.mjs'),'utf8');
   assert.match(xhs,/await taskSpace\(activeTaskSpace.id\)/);
   assert.doesNotMatch(xhs,/activeTaskSpace\?\.page/);
-  assert.match(xhs,/poll<60&&!control.ok/);
+  assert.match(xhs,/reasonCode:'manual_crop_ratio_required'/);
   assert.match(xhs,/JSON.stringify\(xhsCoverRatio\)/);
   assert.match(bili,/coverTask.adopt\(coverTab.page\)/);
   assert.match(bili,/coverPage.hover\('.cover-content .cover-img'\)/);
@@ -79,7 +79,8 @@ test("Ego task-space selection rejects a recycled id with another name", () => {
   const selection = source.slice(start, end);
   assert.match(selection, /activeTaskSpace\.name !== taskName/);
   assert.match(selection, /reason: 'task_space_identity_mismatch'/);
-  assert.match(selection, /activeTaskSpace = await useOrCreateTaskSpace\(taskName\)/);
+  assert.match(selection, /activeTaskSpace = await attachOrCreatePinned\(taskName, binding\)/);
+  assert.match(selection, /await assertActiveSpaceProfile\(binding\)/);
 });
 
 test("final publish guard includes Bilibili's current submit control", () => {
@@ -130,7 +131,7 @@ test("live publisher UI drift recoveries stay encoded in platform adapters", () 
   assert.match(xhs, /pk-cover-guide-popover/);
   assert.match(xhs, /我知道了/);
   assert.match(xhs, /main-cover-editor-modal/);
-  assert.match(xhs, /complete xhs custom cover/);
+  assert.match(xhs, /modern crop ratio requires verified manual confirmation/);
   assert.match(bilibili, /添加封面\|更换封面/);
   assert.match(douyin, /state\.prose===compactText\(douyinDescription\)/);
   assert.match(douyin, /clone\.querySelectorAll\('\[data-mention\], \[contenteditable="false"\]'\)/);

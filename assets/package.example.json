@@ -1,0 +1,42 @@
+{
+  "videoPath": "/absolute/path/to/confirmed-final.mp4",
+  "title": "示例视频：替换为已确认标题",
+  "account": "dahao",
+  "expectedAccounts": {
+    "douyin": {
+      "name": "目标创作者昵称",
+      "douyinId": "replace_with_target_douyin_id"
+    }
+  },
+  "douyinDescription": "替换为已确认的抖音简介。",
+  "douyinTopics": ["教程"],
+  "xhsTitle": "替换为已确认的小红书标题",
+  "xhsTopics": ["教程"],
+  "bilibiliTitle": "替换为已确认的B站标题",
+  "bilibiliDescription": "替换为已确认的B站简介。",
+  "bilibiliTags": ["教程"],
+  "bilibiliAllowedAutoTags": [],
+  "wechatDescription": "替换为已确认的视频号标题\n\n#教程",
+  "wechatTags": ["教程"],
+  "contentTypeDeclaration": "含AI生成内容",
+  "cover": {
+    "uploadCustomCover": true,
+    "platformAssets": {
+      "xiaohongshu": [
+        {"slot": "portrait", "ratio": "3:4", "path": "/absolute/path/to/cover-3x4.png"}
+      ],
+      "douyin": [
+        {"slot": "portrait", "ratio": "3:4", "path": "/absolute/path/to/cover-3x4.png"},
+        {"slot": "landscape", "ratio": "4:3", "path": "/absolute/path/to/cover-4x3.png"}
+      ],
+      "bilibili": [
+        {"slot": "landscape", "ratio": "4:3", "path": "/absolute/path/to/cover-4x3.png"},
+        {"slot": "wide", "ratio": "16:9", "path": "/absolute/path/to/cover-16x9.png"}
+      ],
+      "wechat_channels": [
+        {"slot": "portrait", "ratio": "3:4", "path": "/absolute/path/to/cover-3x4.png"},
+        {"slot": "landscape", "ratio": "4:3", "path": "/absolute/path/to/cover-4x3.png"}
+      ]
+    }
+  }
+}

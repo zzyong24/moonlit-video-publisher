@@ -80,6 +80,10 @@ If Bilibili reports that a requested tag is topic-only and cannot be added as a 
 
 ## Custom Cover
 
+The observed dual editor has independent recommendation `4:3` and personal-space `16:9` slots. Uploading both slots is still a manual boundary (2.8.0), but the receipts are automatic: the gate accepts the dual editor when the landscape slot has asset + URL + visual proof and the wide slot has a 16:9 asset bound to the same task space with visual proof. After the manual upload, take one screenshot of the 16:9 personal-space preview and run `recover-cover-receipts.mjs --platform bilibili --slot-image wide=<png>[@x,y,w,h]`, then re-inspect. The upload adapter itself: on visible dual-slot labels or the `16:9未修改 / 不同步，手动编辑` prompt, return `STATE_AMBIGUOUS` with `manual_dual_slot_required` details and preserve the editor for the owning controller. Do not classify this as a rejected image, repeatedly upload the first image, or click `确认同步`. No new user approval is implied when the existing task already authorizes preparing both covers.
+
+Use the verified manual path until a dual-slot adapter is independently implemented and live-tested: disable native synchronization and use separately produced artwork for each ratio. The observed `不同步，手动编辑` action can close the editor while retaining 4:3; if so, reopen the same cover through `.cover-main .cover-img`, first scrolling it to the viewport center so the fixed header cannot intercept the real click. Select the visible personal-space `16:9` slot, upload its independent image through that active editor’s real image input (observed accept `image/png,image/jpeg`), then save. Treat selectors as observed evidence; verify the current active editor before acting. Independently inspect both saved compositions, bind both source hashes and actual previews to final review, and require the sync prompt to be gone before READY. A main-card receipt alone proves neither slot mapping nor both artworks. See [the cover workflow](cover-workflow.md).
+
 Use the explicitly mapped primary `4:3` or `16:9` asset only when enabled. Read the actual cover editor labels and accepted crop; a filename or package ratio does not prove the native slot. Additional native placements require separate visual evidence.
 
 Upload through the active `.bcc-upload-wrapper` image input. The cover editor’s final control can be a `div.button.submit`, not a native button. Wait until its exact label becomes `完成`, click it through the real input channel, and require the editor to close.
@@ -99,7 +103,7 @@ video fully uploaded
 exact title and description
 exact requested tag chips plus only allowed auto-tags
 both declaration states
-custom 4:3 receipt when enabled
+custom primary receipt when enabled; dual editor additionally requires independent 4:3/16:9 saved-artwork final-review evidence
 no blocking dialog
 visible enabled 立即投稿 button
 final publish not clicked
