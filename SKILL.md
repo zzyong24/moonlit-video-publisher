@@ -1,12 +1,12 @@
 ---
 name: moonlit-video-publisher
-description: "Prepare, verify, and publish one confirmed video to Xiaohongshu, Douyin, Bilibili, and WeChat Channels with Ego Lite — each platform item only after 月明 reviews its final preview and explicitly approves that specific item (per-item approval, never reused; report the published link afterwards). Use when the user asks to 发视频、上传到抖音/小红书/B站/视频号、填平台文案与标签、恢复草稿、核验 READY 或审核通过后发布。Covers are provided assets made by moonlit-video-cover (Codex 生图). Not for creating or editing cover artwork, editing videos, or publishing graphic notes/X threads (moonlit-social-publisher)."
+description: "Prepare, verify, and publish one confirmed video to Xiaohongshu, Douyin, Bilibili, WeChat Channels and YouTube with Ego Lite (four-platform orchestrator plus verified YouTube operator flow) — each platform item only after 月明 reviews its final preview and explicitly approves that specific item (per-item approval, never reused; report the published link afterwards). Use when the user asks to 发视频、上传到抖音/小红书/B站/视频号/YouTube、填平台文案与标签、恢复草稿、核验 READY 或审核通过后发布。Covers are provided assets made by moonlit-video-cover (Codex 生图). Not for creating or editing cover artwork, editing videos, or publishing graphic notes/X threads (moonlit-social-publisher)."
 metadata:
-  version: "2.8.1"
+  version: "2.9.0"
   updated: "2026-11-16"
 ---
 
-# 月明·四平台视频发布
+# 月明·视频发布
 
 **三审必读（文案确认即触发）**：文案确认后按当前激活 `moonlit-content-engine/references/publish-review.md` 实际执行guoshen的script文本审核，不强审初稿、不等成片；音画/封面/平台设置明确未审。上传前content审完整实际包并验证script；草稿上传后final审原生设置和封面实际呈现并验证前两阶段。文案改变使相关旧证据失效；每阶段不能替代后续审核、用户授权或平台裁决。旧v1回执须实际补审，不静默升级；调用门禁必须带 `--require-chain-version 2`。
 
@@ -22,6 +22,10 @@ Prepare one confirmed video package and drive selected creator platforms to a ve
 内容进入发布准备，先按名称解析当前激活 `moonlit-content-engine`，读取其 `references/publish-review.md`，并实际运行依赖 `guoshen`。通读正文或独立语音/字幕及全画面，审核目标平台的当前规则、封面、渠道文案和发布设置；上传前完成内容、封面文件、渠道文案及声明意图的报告与版本绑定回执，content门禁通过才上传未发布草稿并填表；上传后核实际设置及封面裁切，final门禁通过才进入READY或最终提交。仅上传后出现的设置与裁切明确延期，不伪称已查，不反复索取已有上传授权。修复、换平台、文案/媒体/设置变化后重审；审核缺失、未完成或不通过不能继续外发。手工浏览器路径、续发、恢复和直接CLI也遵守同一门禁；本地排版/只读检查可先执行。上游不支持的公众号、X等按合同补充对应平台审核，不能套用视频号结论。
 
 执行发布命令前，按激活目录设置 `MOONLIT_GUOSHEN_GATE`、`MOONLIT_GUOSHEN_DIR`、`MOONLIT_GUOSHEN_RECEIPT`。共享门禁只验证回执，不能替代实际语义审核；通过也不代替月明对这一条的批准。
+
+## YouTube routing (2.9.0)
+
+For an explicit YouTube request, or an authorized “all platforms” request whose private `youtube.json` has `enabled` and `includeInAllPlatforms`, read [the YouTube workflow](references/platform-youtube.md) before opening Studio. It supplies a separate reviewed package, intended channel verification, native audience/AI/settings review, guarded one-shot publication and watch-page playback verification. Read its private preferences at the same configuration root as `config.json`; they store availability and identity only. This fifth destination uses the verified Ego operator flow; the four-platform CLI/config arrays remain limited to their automatic adapters. Do not pass YouTube to the four-platform runner, silently omit it from an explicit request, duplicate already submitted platforms, or bypass three-stage review. Explicit current platform selection always wins over defaults.
 
 ## Configuration And Onboarding
 

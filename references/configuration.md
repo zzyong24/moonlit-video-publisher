@@ -131,3 +131,7 @@ generic Skill default
 Configuration may store reusable preferences, declared platform availability, and the explicitly onboarded standing originality policy. `ask_each_run` requires `--confirm-original-rights` for each mutating run; `all_videos_original` allows the maintained workflow to apply truthful original/self-made declarations without asking again. Never infer or silently upgrade this value.
 
 Never persist cookies, tokens, passwords, video-specific paths, or permission to click the final publish control. Platform availability describes declared account capability, not login credentials. Originality policy and final-publish authorization are separate: the latter always requires an explicit current-run instruction.
+
+## YouTube operator-flow preferences
+
+The optional `youtube.json` beside `config.json` configures the supported [YouTube operator flow](platform-youtube.md). Schema: `{"schemaVersion":1,"enabled":true,"includeInAllPlatforms":true,"egoProfileId":"PROFILE_ID","channelName":"CHANNEL_NAME","channelId":"UC_CHANNEL_ID"}`. It carries no credentials or publication permission. Only set `includeInAllPlatforms` following the user's stated platform preference. An explicit current list overrides this preference. Keep `availablePlatforms` / `defaultPlatforms` restricted to the four automatic adapters; the Agent composes the selected YouTube workflow separately and records its independent package/review/result. Missing or mismatched identity stops upload rather than binding the expected channel to whichever one is logged in.
