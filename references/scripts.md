@@ -25,7 +25,7 @@ Every publishing CLI supports `--help` without onboarding or browser access. Dou
 
 Preserve historical packages/jobs and create a versioned corrected package when adding the new fields. Never rewrite a saved fingerprint. If a matching correct-account upload already exists, plan verified same-page recovery before any new injection. Same-Profile task spaces share the session; other platforms still need manual destination identity checks before preparation and final submission.
 
-Supported platform keys:
+Supported automatic-adapter platform keys (YouTube uses the separate [operator workflow](platform-youtube.md), not these commands):
 
 ```text
 xiaohongshu

@@ -12,13 +12,15 @@ $XDG_CONFIG_HOME/video-publisher/config.json
 $HOME/.config/video-publisher/config.json
 ```
 
-Run `node scripts/config.mjs status` at the start of every Skill invocation. Missing, empty, invalid, unsupported-schema, or incomplete configuration sets `onboardingRequired: true`. Do not inspect creator pages until onboarding is complete.
+Run `node scripts/config.mjs status` at the start of every Skill invocation. Missing, empty, invalid, unsupported-schema, or incomplete configuration sets `onboardingRequired: true`. Do not inspect the four automatic adapters’ creator pages until their onboarding is complete. For a YouTube-only request, use the independent `youtube.json` onboarding below; missing four-adapter configuration does not require unused domestic accounts.
 
 Warnings such as a missing source directory do not erase onboarding, but repair or explicitly override that directory before using it.
 
 ## Onboarding Conversation
 
 Follow this order so users are never asked about platforms they do not use:
+
+For the four automatic adapters, follow these steps; ask separately about YouTube and use the preferences section below rather than adding it to these arrays.
 
 1. Ask which supported creator platforms the user actually has: Xiaohongshu, Douyin, Bilibili, and WeChat Channels. Require at least one; do not preselect all four.
 2. Ask which available platforms should run by default. Propose all available platforms, but allow any non-empty subset.
