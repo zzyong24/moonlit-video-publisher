@@ -2,8 +2,8 @@
 name: moonlit-video-publisher
 description: "Prepare, verify, and publish one confirmed video to Xiaohongshu, Douyin, Bilibili, and WeChat Channels with Ego Lite — each platform item only after 月明 reviews its final preview and explicitly approves that specific item (per-item approval, never reused; report the published link afterwards). Use when the user asks to 发视频、上传到抖音/小红书/B站/视频号、填平台文案与标签、恢复草稿、核验 READY 或审核通过后发布。Covers are provided assets made by moonlit-video-cover (Codex 生图). Not for creating or editing cover artwork, editing videos, or publishing graphic notes/X threads (moonlit-social-publisher)."
 metadata:
-  version: "2.8.0"
-  updated: "2026-10-26"
+  version: "2.8.1"
+  updated: "2026-11-16"
 ---
 
 # 月明·四平台视频发布
@@ -215,7 +215,7 @@ Run `scripts/check-package.mjs` for every selected new-upload platform before br
 8. Start missing native video uploads in parallel. If simple metadata fields are available during a slow upload, use the bounded single-controller metadata recovery path above rather than leaving those fields idle. Never overlap live Ego controllers.
 9. After upload/process completion, let the single UI queue finish metadata, declarations, settings, and independent cover slots.
 10. Collect independent parallel page evidence. A content-only receipt leaves `publishReview` false / `needs_review`, never READY. Complete the actual native settings and cover review, write final evidence bound to the receipt, then re-run same-job verification.
-11. Leave every verified draft open before its final button. When current-run publication is authorized, submit independently READY platforms serially after their own final checks; an unavailable platform does not hold the others. For WeChat Channels login, follow its platform contract’s bounded quick-login recovery and report any remaining login blocker separately.
+11. Leave every verified draft open before its final button. When current-run publication is authorized, submit independently READY platforms serially after their own final checks; an unavailable platform does not hold the others. For WeChat Channels login, follow its platform contract’s bounded quick-login recovery: when the user has authorized the official WeChat `允许` confirmation, verify the exact prompt and identity and complete that click through authorized native desktop input. Do not hand it back merely because a general login handoff default exists. Verify the resulting Channels name and stable ID; report only a concrete remaining blocker. The [WeChat Channels contract](references/platform-wechat-channels.md#login-recovery) includes recovery when a native screenshot incorrectly captures the main chat window.
 
 After 月明 approves a specific platform item (per-item-approval.md), continue with [references/final-publish.md](references/final-publish.md). This is a separate guarded phase after `READY`; never infer it from draft preparation, originality confirmation, or a previous run.
 
