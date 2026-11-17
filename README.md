@@ -77,7 +77,7 @@ YouTube 的中文 Studio 横版视频操作流程已实测至公开及 1080p 播
 - [恢复手册](references/automatic-publishing-playbook.md)与[CLI 命令](references/scripts.md)
 - [历史实测范围](references/live-validation-history.md)
 
-当前版本 **2.9.1**：统一五平台说明、Agent 名称、首次配置、封面依赖与资源导航。2.9.0 加入 YouTube 操作流程；2.8.1 补齐视频号微信授权恢复。
+当前版本 **2.9.2**：加入[发布后资料同步](references/content-closeout.md)，逐字稿、作品与选题回写分别验收。2.9.1：统一五平台说明、Agent 名称、首次配置、封面依赖与资源导航。2.9.0 加入 YouTube 操作流程；2.8.1 补齐视频号微信授权恢复。
 
 ---
 

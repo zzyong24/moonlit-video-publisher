@@ -2,7 +2,7 @@
 name: moonlit-video-publisher
 description: "Prepare, verify, and publish one confirmed video to Xiaohongshu, Douyin, Bilibili, WeChat Channels and YouTube with Ego Lite (four-platform orchestrator plus verified YouTube operator flow) — each platform item only after 月明 reviews its final preview and explicitly approves that specific item (per-item approval, never reused; report the published link afterwards). Use when the user asks to 发视频、上传到抖音/小红书/B站/视频号/YouTube、填平台文案与标签、恢复草稿、核验 READY 或审核通过后发布。Covers are provided assets; use gbro-cover-design when new artwork is needed. Not for creating or editing cover artwork, editing videos, or publishing graphic notes/X threads (moonlit-social-publisher)."
 metadata:
-  version: "2.9.1"
+  version: "2.9.2"
   updated: "2026-11-16"
 ---
 
@@ -222,6 +222,8 @@ Run `scripts/check-package.mjs` for every selected new-upload platform before br
 11. Leave every verified draft open before its final button. When current-run publication is authorized, submit independently READY platforms serially after their own final checks; an unavailable platform does not hold the others. For WeChat Channels login, follow its platform contract’s bounded quick-login recovery: when the user has authorized the official WeChat `允许` confirmation, verify the exact prompt and identity and complete that click through authorized native desktop input. Do not hand it back merely because a general login handoff default exists. Verify the resulting Channels name and stable ID; report only a concrete remaining blocker. The [WeChat Channels contract](references/platform-wechat-channels.md#login-recovery) includes recovery when a native screenshot incorrectly captures the main chat window.
 
 After 月明 approves a specific platform item (per-item-approval.md), continue with [references/final-publish.md](references/final-publish.md). This is a separate guarded phase after `READY`; never infer it from draft preparation, originality confirmation, or a previous run.
+
+After recording platform results, complete [content closeout](references/content-closeout.md) before reporting the work complete: final verbatim transcript, local work status, linked Notion topic/work pages, and the configured private remote projection must have separate truthful readbacks. A platform release is not proof of this synchronization.
 
 After a real release, compare the actual page failures and recovery steps with the current adapters. Preserve user-specific titles, campaign choices, and job IDs in the work's distribution record; move only reusable platform behavior into the maintenance source, verify it, and upgrade the active Skill snapshot. A successful manual repair is evidence for a candidate adapter change, not proof that untested new code already works on the next run.
 
